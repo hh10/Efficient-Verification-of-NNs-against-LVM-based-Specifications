@@ -189,9 +189,11 @@ def test_verinet_ls(ndims, device, i):
     num_classes, ldims, bias = 4, 16, False
     in_dims = ndims*ndims*ldims
     model_layers = [Reshape((1, ldims, ndims, ndims)),  # will reshape latent space line to 2d for conv operations
-                    nn.ConvTranspose2d(ldims, ldims, 3, 1),
-                    nn.ReLU(),  # nn.LeakyReLU(1e-2),  # Note: can try LeakyReLU is using licensed VeriNet version sourced by the authors
-                    nn.Conv2d(ldims, ldims, 3, 1),
+                    ## Note: can run ConvTranspose2d by adding its implementation patch for verinet provided in the codebase verinet_patches/*
+                    # nn.ConvTranspose2d(ldims, ldims, 1, 1),
+                    ## Note: can run LeakyReLU by adding its implementation patch for verinet provided in the codebase verinet_patches/*
+                    # nn.LeakyReLU(1e-2),
+                    nn.Conv2d(ldims, ldims, 1, 1),
                     nn.ReLU(),
                     nn.Flatten(),
                     nn.Linear(in_dims, in_dims, bias=bias),

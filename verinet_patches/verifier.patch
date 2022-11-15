@@ -1,0 +1,26 @@
+diff --git a/verinet/neural_networks/verinet_nn.py b/verinet/neural_networks/verinet_nn.py
+index a4bbc53..9875ba1 100644
+--- a/verinet/neural_networks/verinet_nn.py
++++ b/verinet/neural_networks/verinet_nn.py
+@@ -53,7 +53,7 @@ class VeriNetNN(nn.Module):
+         """
+ 
+         for param in self.parameters():
+-            if isinstance(param, torch.DoubleTensor):
++            if param.dtype == torch.float64 or param.dtype == torch.double:
+                 return True
+ 
+         return False
+diff --git a/verinet/verification/verifier.py b/verinet/verification/verifier.py
+index 0a6c470..dae38df 100644
+--- a/verinet/verification/verifier.py
++++ b/verinet/verification/verifier.py
+@@ -425,7 +425,7 @@ class Verifier:
+         x = x.view(-1)
+         x.data[x < input_bounds[:, 0]] = input_bounds[:, 0][x < input_bounds[:, 0]]
+         x.data[x > input_bounds[:, 1]] = input_bounds[:, 1][x > input_bounds[:, 1]]
+-        x = x.view(1, *self._objective.input_shape).detach().clone()
++        x = x.view(1, *self._objective.input_shape).double().detach().clone()
+ 
+         x.requires_grad = True
+ 
