@@ -2,8 +2,8 @@
 
 This is the codebase for the verification pipeline produced and experiments in our submission. 
 ## Installation:
-To be able to use the codebase, install gurobi (make sure its executable and libraries can be found, can run its setup.py) and all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
-All verification based results in Table 1 and 4 requires VeriNet backend, which can be downloaded from its author's [github repo](https://github.com/vas-group-imperial/VeriNet). After its setup, make sure that `python verinet_line_segment_verification.py` runs successfully.
+   - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
+   - To use the codebase for verification, install gurobi (make sure its executable and libraries can be found, setup.py can be run from where you want to run this codebase), and VeriNet, which can be downloaded from its author's [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verinet_patches) (read its readme for details). After its setup, make sure that `python3 verinet_line_segment_verification.py` runs successfully.
 ## Usage:
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
