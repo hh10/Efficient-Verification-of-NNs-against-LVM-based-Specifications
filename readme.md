@@ -53,6 +53,10 @@ Commands for various uses of this codebase are as follows:
     - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
 
 ## Sample Outcomes:
+Below are the sample reconstruction outcomes for our proposed SRVP pipelines LVMs after training.
+![Screenshot from 2022-11-15 22-26-31](https://user-images.githubusercontent.com/14110609/202038219-5ced19be-5edf-464c-b47d-a775e083120d.png)
+Watch through the videos below to see the specific changes in object reconstructions with changes in disentangled conditional dimensions.
+
 https://user-images.githubusercontent.com/14110609/201974045-bda27395-f399-4e4a-8ff0-9a054c153a6d.mp4
 
 https://user-images.githubusercontent.com/14110609/201974099-ae460e15-a643-4e90-a040-0cee2df279a9.mp4
