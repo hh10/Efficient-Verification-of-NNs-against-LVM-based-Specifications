@@ -1,8 +1,9 @@
-# Efficient Verification of Neural Networks against LVM-based Specifications
+# Efficient Verification of NNs against LVM-based Specifications
 
 This is the codebase for the verification pipeline produced and experiments in our submission. 
 ## Installation:
-To be able to use the codebase, install gurobi (make sure its executable and libraries can be found, can run setup.py) and all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
+To be able to use the codebase, install gurobi (make sure its executable and libraries can be found, can run its setup.py) and all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
+All verification based results in Table 1 and 4 requires VeriNet backend, which can be downloaded from its author's github: https://github.com/vas-group-imperial/VeriNet. After its setup, make sure that `python verinet_line_segment_verification.py` runs successfully.
 ## Usage:
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
@@ -32,7 +33,7 @@ Commands for various uses of this codebase are as follows:
             "model": *specify params to construct the subnetworks like classifier, VAE, etc.* \
         `# Run identifiers` \
             "desc": *short description added to summary tag and results folder* \
-            "notes": *longer detailed notes* \
+            "notes": *longer detailed notes*
 
 2. To verify a trained classifier (pipeline) for different datasets:
     * MNIST, FashionMNIST, TrafficSignsDynSynth:
@@ -46,10 +47,7 @@ Commands for various uses of this codebase are as follows:
             `python3 verify.py --model_path=<path to Object10_model.tar> --test_attribute=<attrA> --target_attributes=<attrB,attrC>` \
     For each dataset image, the script also verifies for eps in conditional dimensions if any.
 
-3. Reproducing experiment results in the submission
- - All reported networks are defined in models.py, models_impl/ and notebook/notebook_utils.py.
- - Some experiments in Table 1 results can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb 
-    notebook and thereafter, running bounds_computation.py and notebook/verification_comparison.py on the trained models. Some of the trained models from this run are uploaded as release with the repo, for user to run the latter scripts directly.
- - Table 1 and 4 requires VeriNet backend, which can be downloaded from its author's github: https://github.com/vas-group-imperial/VeriNet.
-    Make sure that `python verinet_line_segment_verification.py` runs successfully.
-    Thereafter, can train SRVP pipelines as per configs in sample_configs and verify them as explained in 1. and 2. above. Some trained pipelines are also uploaded as release.
+3. Reproducing experiment results in the submission:
+    - All reported networks are defined in models.py, models_impl/ and notebook/notebook_utils.py.
+    - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in sample_configs. Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
+    - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running bounds_computation.py and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
