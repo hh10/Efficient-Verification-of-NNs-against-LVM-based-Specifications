@@ -51,3 +51,7 @@ Commands for various uses of this codebase are as follows:
     - All reported networks are defined in [model.py](model.py), [models_impl/](models_impl) and notebook/notebook_utils.py.
     - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in [sample_configs](sample_configs). Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
     - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
+
+## Sample Outcomes:
+[![Reconstruction on 3D objects dataset (3DOD)](media/object3d.mp4)](media/object3d.mp4)
+[![Reconstruction on Traffic Signs Recognition dataset (TSRD)](media/TSRD.mp4)](media/TSRD.mp4)
