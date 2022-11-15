@@ -380,7 +380,7 @@ class CustomDataloader():
         assert input_shape[1] == input_shape[2]
         w = input_shape[2]
         # Directory containing the data.
-        data_folder = os.path.join("../data", self.dataset_name)
+        data_folder = os.path.join("data", self.dataset_name)
         self.collate_fn = None  # needed when multiple inputs are generated from one input in dataloading
         self.balance_methods = params['data_balance_method']
         conditional, self.conditional_loss_fns = params["conditional"] or {}, params["conditional_loss_fn"] or []

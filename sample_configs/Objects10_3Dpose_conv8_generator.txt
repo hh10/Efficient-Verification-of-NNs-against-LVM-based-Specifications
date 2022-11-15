@@ -4,7 +4,7 @@
     "batch_size": 2048,
     "data_balance_method":"None",
     "classes":"default",
-    "conditional": {"dist": [6, 8, 10, 12, 14], "elev": [0, 10, 20, 30, 40, 50], "azim": [210, 240, 270, 300, 330, 0, 30, 60, 90, 120, 150, 180]},
+    "conditional": {"dist": [6, 8, 10, 12, 14], "elev": [0, 20, 50], "azim": [210, 240, 270, 300, 330, 0, 30, 60, 90, 120, 150, 180]},
     "latent_dim":20,
     "conditional_loss_fn": ["Generator", "Generator", "Generator"],
     "loss_kl_weight":0.01,
