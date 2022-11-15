@@ -53,5 +53,6 @@ Commands for various uses of this codebase are as follows:
     - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
 
 ## Sample Outcomes:
-[![Reconstruction on 3D objects dataset (3DOD)](media/object3d.mp4)](media/object3d.mp4)
-[![Reconstruction on Traffic Signs Recognition dataset (TSRD)](media/TSRD.mp4)](media/TSRD.mp4)
+https://user-images.githubusercontent.com/14110609/201974045-bda27395-f399-4e4a-8ff0-9a054c153a6d.mp4
+
+https://user-images.githubusercontent.com/14110609/201974099-ae460e15-a643-4e90-a040-0cee2df279a9.mp4
