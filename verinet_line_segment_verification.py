@@ -115,17 +115,23 @@ def verinet_verify_line_segment(mlayers, pts, corr_class, num_classes, timeout_s
     for j in range(objective.output_size):
         if j != corr_class:
             objective.add_constraints(out_vars[j] <= out_vars[corr_class])
+    # reported outputs after modifying opensource VeriNet codebase
+    counterex_using_PGD, bounds_summary, mem_usage_bytes = None, None, None
     start_time = time.time()
-    status, counterex_using_PGD, jsip_bounds, mem_usage_bytes = solver.verify(objective=objective, timeout=timeout_s)
+    verifier_output = solver.verify(objective=objective, timeout=timeout_s)
     ver_time = time.time() - start_time
     if sanity_checks:
         print(f"Verification results: {solver.status}")
         print(f"Branches explored: {solver.branches_explored}")
         print(f"Maximum depth reached: {solver.max_depth}")
         print(f"Memory: {solver.branches_explored}")
-        print(f"cex_using_PGD: {counterex_using_PGD}")
-        if jsip_bounds is not None:
-            print(f"jsip_bounds: {jsip_bounds.shape}")
+        if type(verifier_output) is list:
+            status, counterex_using_PGD, jsip_bounds, mem_usage_bytes = verifier_output  # can modify VeriNet codebase to return all these values
+            print(f"cex_using_PGD: {counterex_using_PGD}")
+            if jsip_bounds is not None:
+                print(f"jsip_bounds: {jsip_bounds.shape}")
+        else:
+            status = verifier_output
 
     # Store the counter example if Unsafe. Status enum is defined in src.algorithm.verinet_util
     ceg, ceg_alpha = None, None
@@ -145,7 +151,7 @@ def verinet_verify_line_segment(mlayers, pts, corr_class, num_classes, timeout_s
     solver.cleanup()
     del solver
     bounds_summary = None
-    if jsip_bounds is not None:
+    if type(verifier_output) is list and jsip_bounds is not None:
         bounds_diff = jsip_bounds[:, 1] - jsip_bounds[:, 0]
         bounds_summary = [torch.min(bounds_diff).item(), torch.mean(bounds_diff).item(), torch.max(bounds_diff).item()]
     return status, ceg, counterex_using_PGD, ver_time, ceg_alpha, bounds_summary, mem_usage_bytes
@@ -184,7 +190,7 @@ def test_verinet_ls(ndims, device, i):
     in_dims = ndims*ndims*ldims
     model_layers = [Reshape((1, ldims, ndims, ndims)),  # will reshape latent space line to 2d for conv operations
                     nn.ConvTranspose2d(ldims, ldims, 3, 1),
-                    nn.LeakyReLU(1e-2),
+                    nn.ReLU(),  # nn.LeakyReLU(1e-2),  # Note: can try LeakyReLU is using licensed VeriNet version sourced by the authors
                     nn.Conv2d(ldims, ldims, 3, 1),
                     nn.ReLU(),
                     nn.Flatten(),
