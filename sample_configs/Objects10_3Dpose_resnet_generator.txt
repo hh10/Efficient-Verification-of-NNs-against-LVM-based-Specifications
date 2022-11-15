@@ -1,0 +1,23 @@
+{
+    "dataset":"Objects10_3Dpose",
+    "input_shape": [3,64,64],
+    "batch_size": 2048,
+    "data_balance_method":"None",
+    "classes":"default",
+    "conditional": {"dist": [8, 11, 14], "elev": [0, 3, 6], "azim": [210, 240, 270, 300, 330, 0, 30, 60, 90, 120, 150, 180]},
+    "latent_dim":20,
+    "conditional_loss_fn": ["Generator", "Generator", "Generator"],
+    "loss_kl_weight":0.01,
+    "loss_recons_weight":0.01,
+    "loss_conditional_weight":10,
+    "num_epochs":2,
+    "lr":0.001,
+    "train_cla":true,
+    "train_vae": true,
+    "only_vae_training_epochs":-1,
+    "only_cla_training_epochs":1,
+    "GAN_start_training_epochs":-1,
+    "model":{"source":"hub", "name":"resnet18", "fdn_till_layer":-1, "pretrained":false, "enc_args": {"linear_layers": 1}},
+    "desc":"object3D_resnet_generator",
+    "notes":""
+}

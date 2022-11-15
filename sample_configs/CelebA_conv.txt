@@ -1,0 +1,23 @@
+{
+	"dataset": "CelebA",
+	"input_shape": [3, 64, 64],
+	"batch_size": 64,
+	"data_balance_method": ["reduce"],
+	"classes": ["Male"],
+	"conditional": {"attrs": [["Eyeglasses"], ["Male"]]},
+	"latent_dim": 12,
+	"conditional_loss_fn": ["CE", "CE"],
+	"loss_kl_weight": 0.01,
+	"loss_recons_weight": 0.01,	
+	"loss_conditional_weight": 5000,
+	"num_epochs": 2,
+	"lr": 0.0008,
+	"train_cla": true,
+	"train_vae": true,
+	"only_vae_training_epochs": 1,
+	"only_cla_training_epochs": 3,
+	"GAN_start_training_epochs": -1,
+	"model": {"source": "generic_conv", "fdn_args": {"nconv_layers": 8, "nf": 6, "ks": 7, "linear_dims": [512]}, "enc_args": {"linear_layers": 1}},
+	"desc": "celebA_conv8",
+	"notes": ""
+}

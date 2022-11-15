@@ -1,0 +1,23 @@
+{
+    "dataset":"TrafficSignsDynSynth",
+    "input_shape": [3,64,64],
+    "batch_size":16,
+    "data_balance_method":"None",
+    "classes":"default",
+    "conditional":{"transforms":[["left_shear", "right_shear", "left_rotate", "right_rotate", "towards", "far"]]},
+    "latent_dim":20,
+    "conditional_loss_fn": ["CE"],
+    "loss_kl_weight":0.01,
+    "loss_recons_weight":0.01,
+    "loss_conditional_weight":5000,
+    "num_epochs":2,
+    "lr":0.0005,
+    "train_cla":true,
+    "train_vae": true,
+    "only_vae_training_epochs":-1,
+    "only_cla_training_epochs":1,
+    "GAN_start_training_epochs":-1,
+    "model":{"source":"hub", "name":"resnet18", "fdn_till_layer":-1, "pretrained":false, "enc_args": {"linear_layers": 1}},
+    "desc":"TRDS_resnet",
+    "notes":""
+}

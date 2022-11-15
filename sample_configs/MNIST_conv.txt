@@ -1,0 +1,21 @@
+{
+    "dataset": "MNIST",
+    "input_shape": [1, 28, 28],
+    "batch_size": 128,
+    "data_balance_method": "None",
+    "classes": "default",
+    "latent_dim": 11,
+    "loss_kl_weight": 0.003,
+    "loss_recons_weight": 0.01,
+    "loss_conditional_weight": 0,
+    "num_epochs": 2,
+    "lr": 0.00075,
+    "train_cla": true,
+    "train_vae": true,
+    "only_vae_training_epochs": 0,
+    "only_cla_training_epochs": 2,
+    "GAN_start_training_epochs": -1,
+    "model": {"source": "generic_conv", "fdn_args": {"nconv_layers": 2, "nf": 8, "ks": 7, "linear_dims": [512]}, "enc_args": {"linear_layers": 1}},
+    "desc": "MNIST_conv2",
+    "notes": ""
+}

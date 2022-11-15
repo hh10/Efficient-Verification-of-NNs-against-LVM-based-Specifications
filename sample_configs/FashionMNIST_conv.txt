@@ -1,0 +1,23 @@
+{
+    "dataset": "FashionMNIST",
+    "input_shape": [1, 28, 28],
+    "batch_size": 16,
+    "data_balance_method": "None",
+    "classes": "default",
+    "conditional": {"transforms": [["left_shear", "right_shear", "left_rotate", "right_rotate", "towards", "far"]]},
+    "latent_dim": 22,
+    "conditional_loss_fn": ["CE"],
+    "loss_kl_weight": 0.01,
+    "loss_recons_weight": 0.01,
+    "loss_conditional_weight": 25,
+    "num_epochs": 2,
+    "lr": 0.0005,
+    "train_cla": true,
+    "train_vae": true,
+    "only_vae_training_epochs": 0,
+    "only_cla_training_epochs": 2,
+    "GAN_start_training_epochs": -1,
+    "model": {"source": "generic_conv", "fdn_args": {"nconv_layers": 2, "nf": 8, "ks": 7, "linear_dims": [512]}, "enc_args": {"linear_layers": 1}},
+    "desc": "FMNIST_conv2",
+    "notes": ""
+}
