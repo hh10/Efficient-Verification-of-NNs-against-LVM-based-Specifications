@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 import numpy as np
 
-from utils import weights_init, printl, get_conditional_mean
+from utils import weights_init, printl, get_conditional_mean, compute_mmd
 from models_impl.submodels import FDN, ClassificationHead, InvertibleEncodingHead, Decoder
 
 
@@ -205,7 +205,7 @@ class VaeClassifier(nn.Module):
         if self.include_vae:
             printl("Encoding Head")
             encs = summary(self.encoding_head, input_size=fdns.summary_list[-1].output_size, device=device)
-            assert encs.summary_list[-2].output_size[1] == 2*latent_dims, print(encs.summary_list[-2].output_size, latent_dims)
+            assert encs.summary_list[-2].output_size[1] == 2*latent_dims, print(fdns.summary_list[-1].output_size, encs.summary_list[-2].output_size, latent_dims)
             del fdns, encs
             printl("Decoder")
             decs = summary(self.decoder, input_size=(1, latent_dims), device='cpu')

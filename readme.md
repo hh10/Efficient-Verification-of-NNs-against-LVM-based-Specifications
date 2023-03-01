@@ -1,10 +1,10 @@
 # Efficient Verification of NNs against LVM-based Specifications
 
 This is the codebase for the verification pipeline produced and experiments in our submission. 
-## Installation:
+## Installation
    - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
    - To use the codebase for verification, install gurobi (make sure its executable and libraries can be found, setup.py can be run from where you want to run this codebase), and VeriNet, which can be downloaded from its author's [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verinet_patches) (read its readme for details). After its setup, make sure that `python3 verinet_line_segment_verification.py` runs successfully.
-## Usage:
+## Usage
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
 `python3 train.py --config_file=*<path to config file>*`
@@ -52,7 +52,10 @@ Commands for various uses of this codebase are as follows:
     - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in [sample_configs](sample_configs). Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
     - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
 
-## Sample Outcomes:
+## Additional experiment results for Fairface dataset
+![Fairfaces results](fairface_rebuttal_experiments/fairfaces_experiment_results_summary.png)
+
+## Featured Outcomes and Demos
 Below are the sample reconstruction outcomes for our proposed SRVP pipelines LVMs after training.
 ![Screenshot from 2022-11-15 22-26-31](https://user-images.githubusercontent.com/14110609/202038219-5ced19be-5edf-464c-b47d-a775e083120d.png)
 Watch through the videos below to see the specific changes in object reconstructions with changes in disentangled conditional dimensions.

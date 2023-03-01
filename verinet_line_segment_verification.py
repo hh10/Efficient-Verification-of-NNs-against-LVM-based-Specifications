@@ -6,6 +6,8 @@ from random import randrange
 import time
 import copy
 
+# from sip.torch_nn import Reshape, VeriNetNN, VeriNetNNNode
+# from verinet import VeriNet, Status, Objective
 from verinet.neural_networks.verinet_nn import VeriNetNN, VeriNetNNNode
 from verinet.neural_networks.custom_layers import Reshape
 from verinet.verification.objective import Objective
@@ -15,7 +17,7 @@ from verinet.verification.verifier_util import Status
 torch.manual_seed(422)
 
 
-def merge_linear_neighbours(in_layers: list, sanity_check: bool = True) -> list:
+def merge_linear_neighbours(in_layers: list, device, sanity_check: bool = True) -> list:
     out_layers, linear_layers = [], []
     for i, ml in enumerate(in_layers):
         if isinstance(ml, nn.Linear) and ml.bias is None and i < len(in_layers)-1:
@@ -43,18 +45,20 @@ def merge_linear_neighbours(in_layers: list, sanity_check: bool = True) -> list:
             if not isinstance(ml, nn.Linear):
                 out_layers.append(ml)
     # sanity check
-    rand_x = torch.rand((1, 1)).double()
-    with torch.no_grad():
-        rand_x1 = nn.Sequential(*in_layers)(rand_x)
-        rand_x2 = nn.Sequential(*out_layers)(rand_x)
-    assert torch.max(rand_x1-rand_x2) < 1e-6, print(torch.max(rand_x1-rand_x2), rand_x1, rand_x2)
+    if sanity_check:
+        rand_x = torch.rand((1, 1)).double().to(device)
+        with torch.no_grad():
+            rand_x1 = nn.Sequential(*in_layers)(rand_x)
+            rand_x2 = nn.Sequential(*out_layers)(rand_x)
+        assert torch.max(rand_x1-rand_x2) < 1e-6, print(torch.max(rand_x1-rand_x2), rand_x1, rand_x2)
     return out_layers
 
 
-def setup_bias(layers: list) -> list:
-    rand_x = torch.rand((1, 1)).double()
-    with torch.no_grad():
-        rand_x1 = nn.Sequential(*layers)(rand_x)
+def setup_bias(layers: list, device, sanity_check: bool = True) -> list:
+    if sanity_check:
+        rand_x = torch.rand((1, 1)).double().to(device)
+        with torch.no_grad():
+            rand_x1 = nn.Sequential(*layers)(rand_x)
 
     for i, ml in enumerate(layers):
         if isinstance(ml, nn.Linear) and ml.bias is None:
@@ -62,9 +66,10 @@ def setup_bias(layers: list) -> list:
             layers[i].weight = ml.weight
             layers[i].bias.data.fill_(0.)
 
-    with torch.no_grad():
-        rand_x2 = nn.Sequential(*layers)(rand_x)
-    assert torch.max(rand_x1-rand_x2) < 1e-6, print(torch.max(rand_x1-rand_x2), rand_x1, rand_x2)
+    if sanity_check:
+        with torch.no_grad():
+            rand_x2 = nn.Sequential(*layers)(rand_x)
+        assert torch.max(rand_x1-rand_x2) < 1e-6, print(torch.max(rand_x1-rand_x2), rand_x1, rand_x2)
     return layers
 
 
@@ -93,9 +98,9 @@ def augment_network_for_ls(pts):
 def get_VerinetNN_solver(layers, device, sanity_checks=False):
     layers = [ml.double().to(device) for ml in layers]
     # merge neighbouring Linear layers to better verification results 
-    merged_ver_layers = merge_linear_neighbours(layers, sanity_check=sanity_checks)
+    merged_ver_layers = merge_linear_neighbours(layers, device, sanity_check=sanity_checks)
     # bias False is not expected in Verinet, so set bias to 0 where bias = False for Linear layers
-    merged_ver_layers = setup_bias(merged_ver_layers)
+    merged_ver_layers = setup_bias(merged_ver_layers, device, sanity_check=sanity_checks)
     nodes = nnLayers_to_VeriNetNNNodes(merged_ver_layers)
     return VeriNetNN(nodes), VeriNet(use_gpu=True, max_procs=None)
 
@@ -119,19 +124,20 @@ def verinet_verify_line_segment(mlayers, pts, corr_class, num_classes, timeout_s
     counterex_using_PGD, bounds_summary, mem_usage_bytes = None, None, None
     start_time = time.time()
     verifier_output = solver.verify(objective=objective, timeout=timeout_s)
+    print(verifier_output)
     ver_time = time.time() - start_time
     if sanity_checks:
         print(f"Verification results: {solver.status}")
         print(f"Branches explored: {solver.branches_explored}")
         print(f"Maximum depth reached: {solver.max_depth}")
         print(f"Memory: {solver.branches_explored}")
-        if type(verifier_output) is list:
-            status, counterex_using_PGD, jsip_bounds, mem_usage_bytes = verifier_output  # can modify VeriNet codebase to return all these values
-            print(f"cex_using_PGD: {counterex_using_PGD}")
-            if jsip_bounds is not None:
-                print(f"jsip_bounds: {jsip_bounds.shape}")
-        else:
-            status = verifier_output
+    if type(verifier_output) is list:
+        status, counterex_using_PGD, jsip_bounds, mem_usage_bytes = verifier_output  # can modify VeriNet codebase to return all these values
+        print(f"cex_using_PGD: {counterex_using_PGD}")
+        if jsip_bounds is not None:
+            print(f"jsip_bounds: {jsip_bounds.shape}")
+    else:
+        status = verifier_output
 
     # Store the counter example if Unsafe. Status enum is defined in src.algorithm.verinet_util
     ceg, ceg_alpha = None, None
@@ -154,7 +160,7 @@ def verinet_verify_line_segment(mlayers, pts, corr_class, num_classes, timeout_s
     if type(verifier_output) is list and jsip_bounds is not None:
         bounds_diff = jsip_bounds[:, 1] - jsip_bounds[:, 0]
         bounds_summary = [torch.min(bounds_diff).item(), torch.mean(bounds_diff).item(), torch.max(bounds_diff).item()]
-    return status, ceg, counterex_using_PGD, ver_time, ceg_alpha, bounds_summary, mem_usage_bytes
+    return status, ceg, counterex_using_PGD, ver_time, ceg_alpha #, bounds_summary, mem_usage_bytes
 
 
 def assert_pt_on_line_segment(pt, pts):

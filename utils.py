@@ -261,7 +261,7 @@ def get_transforms(input_size: int, transforms_list: list = [], normalize: bool 
 
 
 def denormalize(dataset_name, images):
-    if dataset_name in ["MNIST", "FashionMNIST", "Zappos50k", "Objects10_3Dpose"]:  # "TrafficSignsSynth"]:
+    if dataset_name in ["MNIST", "FashionMNIST", "Zappos50k", "Objects10_3Dpose"]: #, "Fairfaces", "TrafficSignsSynth"]:
         return images.to('cpu')
     means,  = torch.tensor((0.5, 0.5, 0.5)).reshape(1, 3, 1, 1)
     std_devs = torch.tensor((0.5, 0.5, 0.5)).reshape(1, 3, 1, 1)
@@ -334,7 +334,7 @@ def transformed_images(image, transform_types):
     return images, [attrs]
 
 
-def add_image(l_img, s_img, x_offset=8, y_offset=8):
+def add_image(l_img, s_img, x_offset=7, y_offset=7):
     assert s_img.shape[-3] == 4 and l_img.shape[-3] == 4, print(s_img.shape, l_img.shape)  # check that images are RGBA
     y1, y2 = y_offset, y_offset + s_img.shape[-2]
     x1, x2 = x_offset, x_offset + s_img.shape[-1]
@@ -365,7 +365,7 @@ def prepare_training_results_dir(params, dry_run: bool):
 def get_conditional_limits(dataloader):
     attributes, conditional_dims, conditional_loss_types = dataloader.get_dataset_params(["attributes", "conditional_ldims", "conditional_loss_fns"])
 
-    setpt_limits = [[[0, 1.5]] for i in range(conditional_dims)]
+    setpt_limits = [[[0, 1]] for i in range(conditional_dims)]
     cldi, labels = 0, []
     for ai, attrs_list in enumerate(attributes):
         if conditional_loss_types[ai] in ["KL", "Generator"]:
@@ -392,3 +392,18 @@ def get_conditional_mean(attr_val, nattr_options):
     neg_mask = val < 0
     value = mask * (val+1) + neg_mask * val
     return 4*value
+
+
+# loss related functions
+def compute_kernel(a, b):
+    a_size, b_size, dim = a.shape[0], b.shape[0], a.shape[1]
+    tiled_a = a.view(a_size, 1, dim).repeat(1, b_size, 1)
+    tiled_b = b.view(1, b_size, dim).repeat(a_size, 1,1)
+    return torch.exp(-torch.mean((tiled_a-tiled_b)**2, dim=2)/dim*1.0)
+
+
+def compute_mmd(x, y):
+    x_kernel = compute_kernel(x, x)
+    y_kernel = compute_kernel(y, y)
+    xy_kernel = compute_kernel(x, y)
+    return torch.mean(x_kernel) + torch.mean(y_kernel) - 2*torch.mean(xy_kernel)

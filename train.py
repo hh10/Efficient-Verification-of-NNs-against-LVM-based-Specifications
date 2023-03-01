@@ -47,12 +47,12 @@ def get_epoch_loss_weights(tparams, epoch, train_sep, sw):
     loss_kl_weight, loss_recons_weight, cla_weight = 1, 1, 1
     nepochs = tparams['num_epochs']
     if tparams['train_vae'] and tparams['train_cla'] and not train_sep:
-        if epoch >= tparams['only_vae_training_epochs']:
+        if epoch < tparams['only_vae_training_epochs']:
+            cla_weight = 0
+        else:
             loss_kl_weight = tparams['loss_kl_weight'] * np.min((1, float(epoch+nepochs/5)/nepochs))
             loss_recons_weight = tparams['loss_recons_weight']
-            cla_weight = np.min((0.97, float(epoch+5)/(nepochs-tparams['only_cla_training_epochs']+4)))
-        else:
-            cla_weight = 0
+            cla_weight = np.min((0.97, float(epoch+13)/(nepochs-tparams['only_cla_training_epochs']+4)))
         sw.add_scalar("Classification weightage", cla_weight, global_step=epoch)
     return loss_kl_weight, loss_recons_weight, cla_weight
 
@@ -95,7 +95,7 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
         losses_recons, losses_kl, zs, z_noisys, ys = [], [], [], [], []  # for summary_writer
         epoch_start_time = time.time()
         for bi, (x, y, y_attrs) in enumerate(train_dl.get_batch(device)):
-            if dry_run and bi > 10:
+            if dry_run and bi > 9:
                 break
 
             y_logits = model(x, y_attrs=y_attrs)
@@ -125,7 +125,7 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
                 # adding loss for z cyclic consistency so counterexamples are true and encoding is interpretable
                 z_mu_lvar_hat = model(x_hat)[3]
                 loss_cc = ((z_mu_lvar - z_mu_lvar_hat) ** 2).sum()
-                loss_vae = loss_kl * loss_kl_weight + loss_conditional * tparams['loss_conditional_weight'] + loss_cc
+                loss_vae = loss_kl * loss_kl_weight + loss_conditional * tparams['loss_conditional_weight'] * np.min((25., float(1+epoch))) + loss_cc
                 if tparams['train_vae']:
                     # use reconstruction loss only if LVM is VAE, else only use encoding losses
                     loss_rec = ((x - x_hat) ** 2).sum()
@@ -179,7 +179,7 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
         test_acc = evaluate_accuracy(model, test_dl, device)
         sw.add_scalar("Test accuracy", test_acc, global_step=epoch)
         if tparams['train_vae'] and epoch % 5 == 0:
-            plot_embeddings(zs, z_noisys, ys, conditional_ldims, len(classes), epoch, results_dirs['embeddings'], sw=None)
+            # plot_embeddings(zs, z_noisys, ys, conditional_ldims, len(classes), epoch, results_dirs['embeddings'], sw=None)
             plot_visual_checks(model, device, sample_batch, results_dirs, dataloader, mparams, epoch)
 
         # save models and update experiments list
@@ -188,14 +188,13 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
                 model_name = os.path.join(results_dirs['models'], "best_model_" + ("cla" if test_acc > best_test_acc else "vae"))
                 model.train()
                 save_model(model, loss, epoch, tparams, model_name)
-            if epoch > tparams['num_epochs']/4-1:
-                model_name = os.path.join(results_dirs['models'], f'Epoch_{epoch}_acc_{test_acc:.2f}')
-                model_name += f'_vaeloss_{loss_vae:.2f}.tar' if tparams['train_vae'] else ".tar"
-                model.train()
-                save_model(model, loss, epoch, tparams, model_name)
-                update_experiments_summary(results_dirs['main'], test_acc.item(),
-                                           sum(losses_recons)/len(losses_recons) if tparams['train_vae'] else 0,
-                                           epoch, results_dirs['summaries_file'])
+            model_name = os.path.join(results_dirs['models'], f'Epoch_{epoch}_acc_{test_acc:.2f}')
+            model_name += f'_vaeloss_{loss_vae:.2f}.tar' if tparams['train_vae'] else ".tar"
+            model.train()
+            save_model(model, loss, epoch, tparams, model_name)
+            update_experiments_summary(results_dirs['main'], test_acc.item(),
+                                       sum(losses_recons)/len(losses_recons) if tparams['train_vae'] else 0,
+                                       epoch, results_dirs['summaries_file'])
         best_test_acc = np.max((test_acc.item(), best_test_acc))
         best_recons_loss = np.min((loss_recons, best_recons_loss))
 

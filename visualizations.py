@@ -19,7 +19,7 @@ def plot_visual_checks(model, device, sample_batch, odirs, dataloader, mparams, 
 def plot_verification_plots(ver_results, images_dir, classes, test_transform_names, bi):
     print(ver_results)
     plot_ld_dists_distr(ver_results['deltas'], os.path.join(images_dir, f'latent_space_deltas_{bi}.png'))
-    plot_ld_cond_distr(ver_results['ldim_eps'], np.sum(ver_results['tested']), os.path.join(images_dir, f'latent_space_cond_eps_{bi}.png'))
+    # plot_ld_cond_distr(ver_results['ldim_eps'], np.sum(ver_results['tested']), os.path.join(images_dir, f'latent_space_cond_eps_{bi}.png'))
     plot_ver_results(ver_results['total'], ver_results['tested'], ver_results['verified'], classes, test_transform_names, os.path.join(images_dir, f'ver_results_{bi}.png'))
     plot_ver_times(ver_results['ver_times'], os.path.join(images_dir, f'ver_times_{bi}.png'))
 
@@ -130,9 +130,9 @@ def plot_local_conditional_effect(sample_batch, model, device, image_path, datal
         for i in range(conditional_dims):
             climits = conditional_limits[i]
             for climit in climits:
-                for cvalue in np.linspace(climit[0], climit[1], n):
-                    z_i = z_clean.clone()
-                    z_i[0, i] = cvalue
+                for cvalue in np.linspace(climit[0], climit[1], n):  # 0.75, 1.2
+                    z_i = z.clone()
+                    z_i[0, i] += cvalue
                     zs.append(z_i)
     z = torch.stack((zs), dim=0)
     with torch.no_grad():
@@ -179,6 +179,8 @@ def plot_conditional_effect(model, device, image_path, latent_dims, dataloader):
             csteps = np.linspace(climit[1], climit[0], n)  # reduce in current active conditional dim in n steps
             nlimits = climits[j+1] if j < len(climits)-1 else conditional_limits[i+1][0]
             nsteps = np.linspace(*nlimits, n)  # increase in next conditional dim in n steps
+            # csteps = np.linspace(1.2, 0, n)  # reduce in current active conditional dim in n steps
+            # nsteps = np.linspace(0, 1.2, n)  # increase in next conditional dim in n steps
             for dc, dn in zip(csteps, nsteps):
                 z_np[i], z_np[i+1] = dc, dn
                 zs.append(z_np)
@@ -199,31 +201,30 @@ def plot_local_conditionals(image_batches, z_ceg_batches, model, device, image_p
 
     oimages, zs, zs_ceg_nn = [], [], []
     model = model.to(device)
-    for img, z_cegs in zip(image_batches, z_ceg_batches):
+    for img, ceg in zip(image_batches, z_ceg_batches):
         img = img.to(device)
-        for ceg in z_cegs:
-            dim_ind, ceg_eps, z_ceg = ceg
-            oimages.append(img)
-            with torch.no_grad():
-                _, z, _ = model(img, only_gen_z=True)
-            for ei, eps in enumerate(set_pts):
-                if eps <= ceg_eps and (ei == len(set_pts)-1 or ceg_eps < set_pts[ei+1]):
-                    z_ceg = z_ceg.to(device)
-                    zs.append(z_ceg); zs_ceg_nn.append(z_ceg)
-                z_i = z.clone()
-                z_i[0, dim_ind] += eps
-                zs.append(z_i)
+        dim_ind, ceg_eps, z_ceg = ceg
+        oimages.append(img)
+        with torch.no_grad():
+            _, z, _ = model(img, only_gen_z=True)
+        for ei, eps in enumerate(set_pts):
+            if eps <= ceg_eps and (ei == len(set_pts)-1 or ceg_eps < set_pts[ei+1]):
+                z_ceg = z_ceg.to(device)
+                zs.append(z_ceg); zs_ceg_nn.append(z_ceg)
+            z_i = z.clone()
+            z_i[0, dim_ind] += eps
+            zs.append(z_i)
     z, z_ceg_nn = torch.stack((zs), dim=0), torch.stack((zs_ceg_nn), dim=0)
     with torch.no_grad():
         images = dataloader.denormalize(model.decoder(z.squeeze(1)))
         cegs = dataloader.denormalize(model.decoder(z_ceg_nn.squeeze(1)))
-    oimages = torch.stack(oimages)
+    oimages = torch.concat(oimages, axis=0)
     assert cegs.shape == oimages.shape and images.dim() == 4 and cegs.dim() == 4, print(images.shape, oimages.shape, cegs.shape)
     plot_images([oimages, images, cegs], ["Original images", "Conditional transformations of classes", "Counterexample"], image_path, num_rows=[oimages.shape[0]]*3, wratio=[1, len(set_pts)+1, 1])
 
 
 def plot_ld_dists_distr(deltas_hists, images_path):
-    matplotlib.rc('font', **{'family': 'normal', 'size': 10})
+    # matplotlib.rc('font', **{'family': 'normal', 'size': 10})
     
     fig, axes = plt.subplots(nrows=len(deltas_hists), ncols=len(list(deltas_hists.values())[0]), figsize=(50, 5), gridspec_kw={'hspace': 0.9, 'wspace': 0.4})
     fig.tight_layout()
@@ -241,7 +242,7 @@ def plot_ld_dists_distr(deltas_hists, images_path):
 
 
 def plot_ld_cond_distr(epses, num_tested, images_path):
-    matplotlib.rc('font', **{'family': 'normal', 'size': 12})
+   # matplotlib.rc('font', **{'family': 'normal', 'size': 12})
 
     fig, axes = plt.subplots(ncols=len(epses), figsize=(60, 5), gridspec_kw={'hspace': 1.6, 'wspace': 0.4})
     fig.tight_layout()
@@ -262,7 +263,7 @@ def plot_ld_cond_distr(epses, num_tested, images_path):
 
 
 def plot_ver_results(total_pc, tested_pc, verified_pt_pc, classes, test_transforms, images_path):
-    matplotlib.rc('font', **{'family': 'normal', 'size': 8})
+    # matplotlib.rc('font', **{'family': 'normal', 'size': 8})
 
     cw = 13*len(classes)
     xx = np.arange(0, cw*(len(classes)+1), cw)
@@ -362,7 +363,7 @@ def produce_embeddings(dl, model, device, num_batches):
         z = model.encoding_head.construct_z(z_mu_lvar, add_noise=False)
         zs.extend(z.detach().to("cpu"))
         ys.extend(y.detach().to("cpu"))
-        x_feats.extend(x_feat.detach().to("cpu"))
+        x_feats.extend(torch.reshape(x_feat, (x_feat.shape[0], -1)).detach().to("cpu"))
     xs, zs, ys, x_feats = torch.stack(xs, dim=0), torch.stack(zs), torch.stack(ys), torch.stack(x_feats)
     return xs, zs, ys, x_feats
 

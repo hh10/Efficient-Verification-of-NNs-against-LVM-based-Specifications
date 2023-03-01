@@ -282,14 +282,15 @@ class TorchDatasetWithAnnotatedTransforms(DatasetsWithAnnotatedTransforms):
 class MergedDatasetsWithAnnotatedTransforms(DatasetsWithAnnotatedTransforms):
     """ Class to load object and background images in different sizes, apply transforms to the former and
         alpha blend them to latter. In codebase, used for Traffic Signs dataset. """
-    def __init__(self, ods_path, bds_path, input_shape, conditional):
+    def __init__(self, ods_path, bds_path, input_shape, transforms, conditional):
         def pil_RGBA_loader(path):
             # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
             with open(path, 'rb') as f:
                 return Image.open(f).convert('RGBA')
 
-        self.bdataset = datasets.ImageFolder(bds_path, transform=get_transforms(input_shape, normalize=True, ndims=4), loader=pil_RGBA_loader)
-        self.odataset = datasets.ImageFolder(ods_path, transform=get_transforms(input_shape * 7/9, normalize=True, ndims=4), loader=pil_RGBA_loader)
+        self.transforms = get_transforms(input_shape, transforms, normalize=True)
+        self.bdataset = datasets.ImageFolder(bds_path, transform=get_transforms(input_shape, normalize=False, ndims=4), loader=pil_RGBA_loader)
+        self.odataset = datasets.ImageFolder(ods_path, transform=get_transforms(input_shape * 7/9, normalize=False, ndims=4), loader=pil_RGBA_loader)
         self.classes, _ = self.odataset.find_classes(ods_path)  # exposed
         if "attrs" in conditional and "CLASSES" in conditional["attrs"]:
             conditional["classes"] = self.classes
@@ -304,7 +305,8 @@ class MergedDatasetsWithAnnotatedTransforms(DatasetsWithAnnotatedTransforms):
         oimages, labels, attrs = super(MergedDatasetsWithAnnotatedTransforms, self).__getitem__(self.odataset, oindex)
         images = []  # transformed_oimages_against_all_bkgnds
         for oimage in oimages:
-            image = add_image(bimage.clone(), oimage)  # [4, w, w]
+            image = add_image(bimage.clone(), oimage)  # [3, w, w]
+            image = self.transforms(transforms.ToPILImage()(image))
             images.append(image)
         return torch.stack(images), labels, attrs
 
@@ -372,6 +374,69 @@ class DataBatcher():
         return len(self.dl) * n_sub_batches
 
 
+# additional dataset for review (not clean)
+class FairfacesDataset(Dataset):
+    def __init__(self, dataset_path: str, img_size: int, dataset_rows_path=None):
+        self.means = (0.5, 0.5, 0.5)  # (0.485, 0.456, 0.406)  # (0.5, 0.5, 0.5)
+        self.std_devs = (0.5, 0.5, 0.5)  # (0.229, 0.224, 0.225)  # (0.5, 0.5, 0.5)
+        transforms_list = [transforms.Resize(int(img_size)),
+                           transforms.CenterCrop(int(img_size)),
+                           transforms.ToTensor(),
+                           transforms.Normalize(self.means, self.std_devs)]
+        self.transform = transforms.Compose(transforms_list)
+        self.dataset_path = dataset_path
+        self.input_size = img_size
+        if dataset_rows_path is None:
+            self.dataset_rows = pd.read_csv(f"{dataset_path}/fairface_label_train.csv")
+        else:
+            self.dataset_rows = pd.read_csv(dataset_rows_path)
+
+        self.gender2label = {"Male": 0,
+                             "Female": 1}
+        self.race2label = {"Black": 0,
+                           "Indian": 1,
+                           # "Southeast Asian": 2,
+                           # "Latino_Hispanic": 3,
+                           # "Middle Eastern": 4,
+                           "East Asian": 2}
+                           #"White": 6}
+        print(f"Loaded dataset with classes: {len(self.gender2label)} and attributes: {len(self.race2label)}")
+
+    def __len__(self):
+        return len(self.dataset_rows)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        img_name = os.path.join(self.dataset_path, self.dataset_rows.iloc[idx, 0])
+        image = Image.open(img_name)
+        gender = self.dataset_rows.iloc[idx, 2]
+        assert(gender in self.gender2label), print(f"Unknown gender {gender}")
+        gender = int(self.gender2label[gender])
+        race = self.dataset_rows.iloc[idx, 3]
+        if race not in self.race2label:
+            return self.__getitem__((idx+1) % self.__len__())
+        race = int(self.race2label[race])
+        if self.transform:
+            image = self.transform(image)
+        return image, gender, torch.Tensor([race]).long()
+
+    def denormalize(self, images: torch.Tensor):
+        means, = torch.tensor(self.means).reshape(1, 3, 1, 1)
+        std_devs = torch.tensor(self.std_devs).reshape(1, 3, 1, 1)
+        return images.to('cpu') * std_devs + means
+
+    def get_classes(self):
+        return list(self.gender2label.keys())
+
+    def get_attributes(self):
+        return list(self.race2label.keys())
+
+    def transform_tensor_image(self, x, transform_to_apply):
+        xi = denormalize("Fairfaces", x).squeeze(0)
+        return get_transforms(self.input_size, [transforms.ToPILImage(), transform_to_apply], normalize=True)(xi)
+
+
 class CustomDataloader():
     
     def __init__(self, params: dict, apply_random_transforms: bool = True, apply_harmful_transforms: bool = False):
@@ -386,11 +451,11 @@ class CustomDataloader():
         conditional, self.conditional_loss_fns = params["conditional"] or {}, params["conditional_loss_fn"] or []
         assert "Generator" not in self.conditional_loss_fns or all([closs == "Generator" for closs in self.conditional_loss_fns])
 
-        transforms_list = [transforms.GaussianBlur(11, sigma=(0.1, 3.0)),
+        transforms_list = [transforms.GaussianBlur(11, sigma=(8, 13)),
                            # transforms.RandomPosterize(bits=4.),
                            transforms.ColorJitter(),
                            transforms.TrivialAugmentWide(),
-                           transforms.RandomAdjustSharpness(sharpness_factor=0.3, p=0.9)] if apply_harmful_transforms else []
+                           transforms.RandomAdjustSharpness(sharpness_factor=0.1, p=0.99)] if apply_harmful_transforms else []
         dataset, attributes, conditional_ldims, classes = None, None, None, None  # must be set based on dataset in init
 
         if self.dataset_name in ["MNIST", "FashionMNIST"]:
@@ -419,7 +484,7 @@ class CustomDataloader():
             classes, attribute_names = dataset.classes, dataset.attribute_names
 
         elif self.dataset_name == "TrafficSignsDynSynth":
-            dataset = MergedDatasetsWithAnnotatedTransforms(os.path.join(data_folder, "signs"), os.path.join(data_folder, "backgrounds"), w, conditional)
+            dataset = MergedDatasetsWithAnnotatedTransforms(os.path.join(data_folder, "signs"), os.path.join(data_folder, "backgrounds"), w, transforms_list, conditional)
             classes = dataset.classes
             attribute_names = dataset.get_attributes()
             self.collate_fn = self.annotated_dataset_collate_fn
@@ -430,6 +495,11 @@ class CustomDataloader():
             dataset = ImageFolderWithPaths(data_folder, get_transforms(w, transforms_list, normalize=self.dataset_name in ["Runways"]), conditional)
             classes, _ = dataset.find_classes(data_folder)
             attribute_names = [[f'{k}_{vv}' for vv in v] for (k, v) in conditional.items()]
+
+        elif self.dataset_name == "Fairfaces":
+            dataset = FairfacesDataset(data_folder, w)
+            classes = dataset.get_classes()
+            attribute_names = [dataset.get_attributes()]
 
         else:
             raise NotImplementedError(f'Dataloader for {self.dataset_name} not implemented')

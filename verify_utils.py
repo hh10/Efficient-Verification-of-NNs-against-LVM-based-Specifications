@@ -7,6 +7,7 @@ import json
 
 from utils import NpEncoder
 from verinet_line_segment_verification import verinet_verify_line_segment, augment_network_for_ls
+# from verinet import Status
 from verinet.verification.verifier_util import Status
 
 
@@ -34,7 +35,7 @@ def get_specification(dparams, test_attribute, target_attributes):
         if type(dparams['conditional']) is not dict:
             dparams['conditional'] = {}
         dparams['conditional']['transforms'] = [test_transforms]
-    elif dparams['dataset'] == 'CelebA':
+    elif dparams['dataset'] in ['CelebA', 'Fairfaces']:
         test_transform_names = [f'Inv. to {test_attribute}']
     elif dparams['dataset'] in ['Objects10_3Dpose', 'Runways']:
         test_transform_names = [f'{test_attribute} to {at}\n' for at in target_attributes]
@@ -73,12 +74,12 @@ def get_specification_inputs_object3d(batch, model, device, dataloader, args):
     return x_set, y.item(), np.array(y_attrs_)
 
 
-def get_specification_inputs(dataset_name, batch, model, device, dataloader, args):
+def get_specification_inputs(batch, model, device, dataloader, args):
     """Returns zs, zs_mu_sigma, y for a batch (two or more relevant images) for verification, x_pair for visualization"""
     x_in, y, y_attrs = batch
     dataset, dataset_name = dataloader.dataset, dataloader.dataset_name
     x, y = x_in[0].unsqueeze(0), y[0]
-    assert x.dim() == 3, print(x.shape)
+    assert x.dim() == 4, print(x.shape)
 
     model = model.to(device)  # why
     pred_logits = model(x.to(device), only_cla=True)
@@ -87,17 +88,17 @@ def get_specification_inputs(dataset_name, batch, model, device, dataloader, arg
         return None, y.item(), y_attrs
 
     x_set = x_in  # for most datasets, the relevant setpoints come from dataloading itself
-    if dataset_name == 'CelebA':
+    if dataset_name in ['CelebA', 'Fairfaces']:
         if args['flip_head']:
             # just flip the image, but verify for this image only if it belongs to the test attribute
-            if not dataset.image_has_attribute(y_attrs[0], args['test_attribute']):  # change of logic!!
+            if args['test_attribute'] != "" and not dataset.image_has_attribute(y_attrs[0], args['test_attribute']):  # change of logic!!
                 return None, None, y_attrs
             x_set = torch.stack([x.squeeze(0), dataset.transform_tensor_image(x, transforms.RandomHorizontalFlip(p=1))], dim=0)
         else:
             # for each input, find set of images that differ only in single attribute or should definitely belong to the same class
             x_set = dataset.get_same_class_attribute_change_pair(x, y, y_attrs[0], args['test_attribute'])
     assert x_set.dim() == 4, print(x_set.shape)
-    return x_set, y.item(), y_attrs
+    return x_set, y, y_attrs
 
 
 def pgd_on_ls(model, device, label, ls_endpoints, ver_results, index, feat_space_spec, pot_cex_alpha=None):
@@ -143,7 +144,7 @@ def pgd_on_ls(model, device, label, ls_endpoints, ver_results, index, feat_space
 
 
 # internals
-def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_to_check, dparams, feat_space_spec=False):
+def verinet_verify_for_zs(x, y, model, ver_results, image_results, num_classes, device, ndims_to_check, dparams, feat_space_spec=False):
 
     def update_feat_stats(model, y, ver_status, ver_time, ceg, index):
         def feat_recons_pred(model, y, x_feat):
@@ -171,7 +172,7 @@ def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_t
             model, z_mu_lvar = model.to(device), z_mu_lvar.unsqueeze(0).to(device)
             with torch.no_grad():
                 if z is None:
-                    z = model.encoding_head.construct_z(z_mu_lvar)
+                    z = model.encoding_head.construct_z(z_mu_lvar, add_noise=False)
                 y_logits, _, recons_z_mu_lvar = model(model.decoder(z.unsqueeze(0)), only_gen_z=True)
             _, predLabel = torch.max(y_logits, axis=1)
             return torch.abs(z_mu_lvar - recons_z_mu_lvar).squeeze(0).detach().to("cpu"), predLabel == y
@@ -183,7 +184,7 @@ def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_t
             return False
         if ver_status == Status.Unsafe:
             ver_results['ver_times']['unsafe'].append(ver_time)
-            delta, cla_correct = latent_vector_recons_diff_pred(model, y, ceg)
+            delta, cla_correct = latent_vector_recons_diff_pred(model, y, ceg.squeeze(0))
             ceg_type = "false" if cla_correct else "true"
             bdeltas[f"counterexs_{ceg_type}"].append(delta)
             ver_results[f"counterexs_{ceg_type}"][index][y] += 1
@@ -197,11 +198,12 @@ def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_t
 
     batch_deltas = {'verified': [], 'counterexs_true': [], 'counterexs_false': [], 'counterexs_true_after_traversal': []}
     ver_layers = model.classification_head.get_layers() if feat_space_spec else model.verification_model_layers()
+    print(ver_layers)
     # to not continue checking transform after smaller transform fails
     completed_transform = None
     if dparams['dataset'] in ['MNIST', 'FashionMNIST', 'TrafficSignsDynSynth']:
         transforms = []
-        for k, v in dparams['conditional']['transforms'].items():
+        for k, v in dparams['conditional']['transforms'][0].items():
             transforms += [k]*v['steps']
 
     points = xs_feat if feat_space_spec else zs_mu_lvar
@@ -217,7 +219,8 @@ def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_t
         print("Verinet ver status", ver_status)
         if ver_status == Status.Unsafe:
             assert ls_ceg is not None, print("Status unsafe, but ls_ceg is None.")
-            ver_results['counterexs_wo_pgd'][pi][y] += (1-int(ceg_is_from_PGD))
+            if ceg_is_from_PGD is not None:
+                ver_results['counterexs_wo_pgd'][pi][y] += (1-int(ceg_is_from_PGD))
             # check passes, can verify but not necessary to add in normal runs
             # ceg_hat = nn.Sequential(*model.encoding_head.get_inverse_layers())(ceg.double().to(device)).to("cpu")
             # assert_pt_on_line_segment(ceg_hat[0], x_feats_ls)
@@ -228,14 +231,16 @@ def verinet_verify_for_zs(x, y, model, ver_results, num_classes, device, ndims_t
             ceg_is_false = update_latent_stats(model, y, point, zs[pi], ver_status, ver_time, ls_ceg, batch_deltas, pi)
 
         if ver_status == Status.Safe:
-            ver_status['images']['safe'].append(torch.stack((x[0], x[pi+1])))
+            image_results['safe'].append(torch.stack((x[0], x[pi + 1])))
         elif ver_status == Status.Unsafe:
-            ver_status['images']['unsafe'].append(torch.stack((x[0], x[pi+1])))
+            image_results['unsafe'].append(torch.stack((x[0], x[pi + 1])))
             if ceg_is_false:
-                ls_ceg = pgd_on_ls(model, device, y, ls_endpts, ver_results, pi, feat_space_spec, ls_ceg_alpha) or ls_ceg
+                ls_ceg_ = pgd_on_ls(model, device, y, ls_endpts, ver_results, pi, feat_space_spec, ls_ceg_alpha)
+                if ls_ceg_ is not None:
+                    ls_ceg = ls_ceg_
             if feat_space_spec:
                 _, ls_ceg = model.encoding_head.to(device)(ls_ceg.to(device))  # now this ceg is enc_out_ceg
-            ver_status['images']['ceg_z'].append(model.encoding_head.construct_z(ls_ceg))()
+            image_results['ceg_z'].append(model.encoding_head.construct_z(ls_ceg, add_noise=False))
         if ver_status != Status.Safe and dparams['dataset'] in ['MNIST', 'FashionMNIST', 'TrafficSignsDynSynth']:
             completed_transform = transforms[pi]
 
@@ -279,7 +284,5 @@ def prepare_query1_results_dict(nclasses, num_transforms, ndims_to_check):
                                'counterexs_wo_PGD': [None] * ndims_to_check,
                                'counterexs_true': [None] * ndims_to_check,
                                'counterexs_false': [None] * ndims_to_check},
-                    # images for visualization
-                    'images': {'safe': [], 'unsafe': [], 'ceg_z': []}}
-    results_dict['ldim_eps'] = [{} for i in range(ndims_to_check)]
+                    }
     return results_dict
