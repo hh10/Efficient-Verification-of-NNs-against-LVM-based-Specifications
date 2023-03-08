@@ -439,13 +439,13 @@ class FairfacesDataset(Dataset):
 
 class CustomDataloader():
     
-    def __init__(self, params: dict, apply_random_transforms: bool = True, apply_harmful_transforms: bool = False):
+    def __init__(self, params: dict, apply_random_transforms: bool = True, apply_harmful_transforms: bool = False, datasets_dir: str = "data"):
         self.dataset_name = params['dataset']
         input_shape = params['input_shape']
         assert input_shape[1] == input_shape[2]
         w = input_shape[2]
         # Directory containing the data.
-        data_folder = os.path.join("data", self.dataset_name)
+        data_folder = os.path.join(datasets_dir, self.dataset_name)
         self.collate_fn = None  # needed when multiple inputs are generated from one input in dataloading
         self.balance_methods = params['data_balance_method']
         conditional, self.conditional_loss_fns = params["conditional"] or {}, params["conditional_loss_fn"] or []

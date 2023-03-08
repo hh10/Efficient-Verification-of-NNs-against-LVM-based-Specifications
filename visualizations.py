@@ -369,19 +369,23 @@ def produce_embeddings(dl, model, device, num_batches):
 
 
 def plots_embeddings(axes, ys, x_feats, zs, ld1, ld2):
+    colors, legend_handles = get_colors_and_legend('tab10')
     for ax in axes:
         ax.cla()
         ax.set_ylabel(f'Latent vector dim {ld1}')
         ax.set_xlabel(f'Latent vector dim {ld2}')
-        colors, legend_handles = get_colors_and_legend('tab10')
         ax.legend(handles=legend_handles, loc='lower right', prop={'size': 6})
-    axes[0].scatter(x_feats[:, ld1], x_feats[:, ld2], s=8, c=[colors[yy] for yy in ys.tolist()], picker=True)
-    axes[1].scatter(zs[:, ld1], zs[:, ld2], s=8, c=[colors[yy] for yy in ys.tolist()], picker=True)
+    axes[0].scatter(x_feats[:, ld1], x_feats[:, ld2], s=8, c=[colors[yy] for yy in ys.tolist()], picker=True, pickradius=10)
+    axes[1].scatter(zs[:, ld1], zs[:, ld2], s=8, c=[colors[yy] for yy in ys.tolist()], picker=True, pickradius=10)
 
 
 def interpolate_embeddings(endpts, axes, model, device, ld1, ld2, ninterps, norm_func):
     if len(endpts) < 2:
         return []
+    axes[1].set_title(f'Interpolating from class {endpts[0]["y"]} to {endpts[1]["y"]}', y=-0.3)
+    axes[0].imshow(make_grid(norm_func(endpts[0]["x"]), nrow=1).permute(1, 2, 0))
+    axes[2].imshow(make_grid(norm_func(endpts[1]["x"]), nrow=1).permute(1, 2, 0))
+
     x_feat_1, x_feat_2 = endpts[0]["x_feat"].to(device), endpts[1]["x_feat"].to(device)
     x_feats = [x_feat_1 + (x_feat_2 - x_feat_1)*t for t in np.linspace(0, 1, ninterps)]
     z_1, z_2 = endpts[0]["z"].to(device), endpts[1]["z"].to(device)
@@ -393,10 +397,18 @@ def interpolate_embeddings(endpts, axes, model, device, ld1, ld2, ninterps, norm
         x_feats_zs.append(x_feat_z.squeeze(0))
     x_feats_zs += zs
     interps = norm_func(model.decoder(torch.stack(x_feats_zs)).to('cpu').detach())
-
-    axes[1].set_title(f'Interpolating from class {endpts[0]["y"]} to {endpts[1]["y"]}', y=-0.25)
-    axes[0].imshow(make_grid(norm_func(endpts[0]["x"]), nrow=1).permute(1, 2, 0))
-    axes[2].imshow(make_grid(norm_func(endpts[1]["x"]), nrow=1).permute(1, 2, 0))
     axes[1].imshow(make_grid(interps, nrow=ninterps).permute(1, 2, 0))
     axes[0].axis("on"); axes[1].axis("off"); axes[2].axis("on")  # noqa: E702
     return [torch.stack(x_feats, dim=0).detach().cpu().numpy(), torch.stack(zs, dim=0).detach().cpu().numpy()]
+
+
+def random_eps_ball_embeddings(pt, ax, model, device, eps, num, norm_func):
+    ax.set_title(f'Random decodings in eps={eps} ball around picked encoding', y=-0.175)
+    x_feat, z = pt["x_feat"].to(device), pt["z"].to(device)
+    x_feats = x_feat + torch.rand(num, *x_feat.shape).to(device)
+    x_feats_z, _ = model.encoding_head(x_feats, add_noise=False)
+    zs = z + torch.rand(num, *z.shape).to(device)
+    x_feats_zs = torch.vstack((x_feats_z, zs)).to(device)
+    decodings = norm_func(model.decoder(x_feats_zs).to('cpu').detach())
+    ax.imshow(make_grid(decodings, nrow=num).permute(1, 2, 0))
+    ax.axis("off")
