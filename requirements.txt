@@ -7,8 +7,8 @@ pandarallel==1.6.3
 pandas==1.5.1
 Pillow==9.2.0
 psutil==5.9.1
-tensorboard==2.9.1
-torch==1.12.0+cu116
+tensorboard
 torchinfo==1.7.0
+torch==1.12.0+cu116
 torchvision==0.13.0+cu116
 
