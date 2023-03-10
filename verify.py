@@ -13,11 +13,8 @@ from utils import load_params, evaluate_accuracy, get_balanced_batch, load_model
 from visualizations import plot_verification_results, plot_local_conditional_effect, plot_verification_plots, plot_local_conditionals
 from verify_utils import (get_specification, get_specification_inputs, verinet_verify_for_zs,
                           save_ver_results, prepare_query1_results_dict, get_specification_inputs_object3d)
-from train_validator import ClaAttrDet
-from verinet_line_segment_verification import get_VerinetNN_solver
-# from verinet import Status, Objective
-from verinet.verification.verifier_util import Status
-from verinet.verification.objective import Objective
+from verifiers_utils import get_verifier_solver, get_classification_objective, Status
+# from train_validator import ClaAttrDet
 
 
 def verify_data(model, device, data, ndims_to_check, dparams, test_transform_names, dataloader, images_dir, args, save_args):
@@ -51,7 +48,7 @@ def verify_data(model, device, data, ndims_to_check, dparams, test_transform_nam
 
         # Query 1: set of images that need to be interpolated among/between
         verinet_verify_for_zs(x_set, y, model, ver_results, image_results, len(classes), device, ndims_to_check, dparams)
-        #verinet_verify_for_zs(x_set, y, model, feat_ver_results, image_results, len(classes), device, ndims_to_check, dparams, feat_space_spec=True)
+        # verinet_verify_for_zs(x_set, y, model, feat_ver_results, image_results, len(classes), device, ndims_to_check, dparams, feat_space_spec=True)
 
         if ti % 3 == 0 or ti == nimages-1 or bi == nimages-1:
             save_ver_results(*save_args, ver_results, bi+1, test_transform_names)
@@ -68,7 +65,7 @@ def verify_data(model, device, data, ndims_to_check, dparams, test_transform_nam
 
 def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, dataloader, images_dir, save_args, attr_cla=None):
     # get the verinet_model
-    vmodel, solver = get_VerinetNN_solver(model.verification_model_layers(), torch.device("cpu"), sanity_checks=False)
+    vmodel, solver = get_verifier_solver(model.verification_model_layers(), device, sanity_checks=False)
     print(vmodel)
     climits, _ = get_conditional_limits(dataloader)
 
@@ -103,14 +100,11 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
                     input_bounds[ni, 1] = np.clip(z_mu_lvar[ni] + eps, 0, 1)
                     if np.max(input_bounds[:, 1] - input_bounds[:, 0]) == 0:
                         print("nothing to verify")
-                    objective = Objective(input_bounds, output_size=num_classes, model=vmodel)
-                    out_vars = objective.output_vars
-                    for j in range(objective.output_size):
-                        if j != y.item():
-                            objective.add_constraints(out_vars[j] <= out_vars[y.item()])
+                    objective = get_classification_objective(input_bounds, y.item(), num_classes, vmodel)
 
                     ver_status = solver.verify(objective=objective, timeout=30)
                     print(ver_status)
+                    ver_status = Status(ver_status.value)
 
                     if eps not in vresults['ldim_eps'][ni]:
                         vresults['ldim_eps'][ni][eps] = 0
@@ -152,14 +146,13 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
 
 
 def verinet_verify_region_zs(model, device, data, nimages, save_args):
-    progress_manager = enlighten.get_manager()
-    batch_progress = progress_manager.counter(total=nimages, desc="\tBatches", unit="images", leave=False)
-
     # get the verinet_model
-    vmodel, solver = get_VerinetNN_solver(model.verification_model_layers(), device)
+    vmodel, solver = get_verifier_solver(model.verification_model_layers(), device, sanity_checks=False)
     print(vmodel)
 
     region_eps = {'total': 0}
+    progress_manager = enlighten.get_manager()
+    batch_progress = progress_manager.counter(total=nimages, desc="\tBatches", unit="images", leave=False)
     for bi, (x, y, _) in enumerate(data.get_batch(device)):
         if region_eps['total'] >= nimages:
             break
@@ -179,14 +172,11 @@ def verinet_verify_region_zs(model, device, data, nimages, save_args):
             input_bounds[:, 1] = np.clip(z_mu_lvar + eps, 0, 1)
             if np.max(input_bounds[:, 1] - input_bounds[:, 0]) == 0:
                 print("nothing to verify")
-            objective = Objective(input_bounds, output_size=num_classes, model=vmodel)
-            out_vars = objective.output_vars
-            for j in range(objective.output_size):
-                if j != y.item():
-                    objective.add_constraints(out_vars[j] <= out_vars[y.item()])
+            objective = get_classification_objective(input_bounds, y.item(), num_classes, vmodel)
 
             ver_status = solver.verify(objective=objective, timeout=30)
             print(ver_status)
+            ver_status = Status(ver_status.value)
 
             if eps not in region_eps:
                 region_eps[eps] = 0

@@ -6,9 +6,7 @@ import numpy as np
 import json
 
 from utils import NpEncoder
-from verinet_line_segment_verification import verinet_verify_line_segment, augment_network_for_ls
-# from verinet import Status
-from verinet.verification.verifier_util import Status
+from verifiers.segment_verification_utils import verify_segment, segment_encoding_layers, Status
 
 
 def get_specification(dparams, test_attribute, target_attributes):
@@ -102,7 +100,7 @@ def get_specification_inputs(batch, model, device, dataloader, args):
 
 
 def pgd_on_ls(model, device, label, ls_endpoints, ver_results, index, feat_space_spec, pot_cex_alpha=None):
-    prepend_layers = [layer.float() for layer in augment_network_for_ls(ls_endpoints)]
+    prepend_layers = [layer.float() for layer in segment_encoding_layers(ls_endpoints)]
     prepend_net = nn.Sequential(*prepend_layers).to(device)
     loss_criterion = nn.CrossEntropyLoss()
     adv_alpha = pot_cex_alpha or torch.zeros((1, 1))
@@ -215,7 +213,7 @@ def verinet_verify_for_zs(x, y, model, ver_results, image_results, num_classes, 
 
         ls_ceg = pgd_on_ls(model, device, y, ls_endpts, ver_results, pi, feat_space_spec)  # prelim ceg check
         print("Prelim PGD safe?: ", ls_ceg is None)
-        ver_status, ls_ceg, ceg_is_from_PGD, ver_time, ls_ceg_alpha = verinet_verify_line_segment(ver_layers, ls_endpts, y, num_classes, 30)
+        ver_status, ls_ceg, ceg_is_from_PGD, ver_time, ls_ceg_alpha = verify_segment(ver_layers, ls_endpts, y, num_classes, 30, device)
         print("Verinet ver status", ver_status)
         if ver_status == Status.Unsafe:
             assert ls_ceg is not None, print("Status unsafe, but ls_ceg is None.")

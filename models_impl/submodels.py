@@ -1,11 +1,9 @@
-import torch
 import torch.nn as nn
 import torchvision
 from torchvision import models
 
 from models_impl.generic_nets import conv_Nlayer_downscalar, conv_Nlayer_upscalar, LinearNLayerEncoder, NFLayerEncoder
-# from sip.torch_nn import Reshape
-from verinet.neural_networks.custom_layers import Reshape
+from verifiers_utils import get_verifier_reshape_op
 
 
 def lrelu():
@@ -119,7 +117,7 @@ def create_mirror_decoder(downscaler_net, latent_dims, input_shape):
     un_layers.reverse()
     for i, layer in enumerate(un_layers):
         if type(layer) == nn.Linear:
-            dlayer = [nn.Linear(latent_dims, layer.in_features), Reshape((-1, layer.in_features, 1, 1))]
+            dlayer = [nn.Linear(latent_dims, layer.in_features), get_verifier_reshape_op()((-1, layer.in_features, 1, 1))]
             last_out_features = layer.in_features
         elif type(layer) in [nn.AdaptiveAvgPool2d]:
             dlayer = [nn.ConvTranspose2d(last_out_features, last_out_features, 4, stride=2, padding=0 if i == 1 else 1), lrelu()]

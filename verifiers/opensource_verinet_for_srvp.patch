@@ -1,0 +1,454 @@
+diff --git a/neural_networks/verinet_nn.py b/neural_networks/verinet_nn.py
+index a4bbc53..620f25a 100644
+--- a/neural_networks/verinet_nn.py
++++ b/neural_networks/verinet_nn.py
+@@ -53,7 +53,7 @@ class VeriNetNN(nn.Module):
+         """
+ 
+         for param in self.parameters():
+-            if isinstance(param, torch.DoubleTensor):
++            if param.dtype == torch.float64 or param.dtype == torch.double or isinstance(param, torch.DoubleTensor):
+                 return True
+ 
+         return False
+diff --git a/sip_torch/operations/linear.py b/sip_torch/operations/linear.py
+index 4f2250d..bf0cf5f 100644
+--- a/sip_torch/operations/linear.py
++++ b/sip_torch/operations/linear.py
+@@ -823,6 +823,217 @@ class Conv2d(AbstractOperation):
+         return torch.LongTensor((channels, height, width))
+ 
+ 
++class Conv2dTranspose(AbstractOperation):
++
++    def __init__(self):
++
++        self._out_unfolded = None
++        super().__init__()
++
++    @property
++    def is_linear(self) -> bool:
++        return True
++
++    @property
++    def is_monotonically_increasing(self) -> bool:
++        return False
++
++    @property
++    def required_params(self) -> list:
++        return ["weight", "bias", "kernel_size", "padding", "output_padding",
++                "stride", "in_channels", "out_channels", "groups"]
++
++    @classmethod
++    def abstracted_torch_funcs(cls) -> list:
++
++        """
++        Returns:
++            A list with all torch functions that are abstracted by the current
++            subclass.
++        """
++
++        return [nn.ConvTranspose2d]
++
++    # noinspection PyArgumentList
++    def forward(self, x: torch.Tensor, add_bias: bool = True) -> torch.Tensor:
++
++        """
++        Propagates through the operation.
++
++        Args:
++            x:
++                The input as a NxM tensor where each row is a symbolic bounds for
++                the corresponding node. Can be used on concrete values instead of
++                bound by shaping them into a Nx1 tensor.
++            add_bias:
++                If true, the bias is added.
++        Returns:
++            The value of the activation function at const_terms.
++        """
++
++        stride = self.params["stride"]
++        padding = self.params["padding"]
++        weights = self.params["weight"]
++        bias = self.params["bias"]
++        in_shape = self.params["in_shape"]
++        out_size = torch.prod(self.out_shape(in_shape))
++
++        # Reshape to 2d, stacking the coefficients of the symbolic bound in dim 0, the "batch" dimension"
++        x_2d = x.T.reshape((-1, *in_shape))
++
++        # Perform convolution on the reshaped input
++        y_2d = functional.conv_transpose2d(x_2d, weight=weights, stride=stride, padding=padding)
++
++        # Add the bias to the last "batch" dimension, since this is the constant value of the bounds
++        if add_bias:
++            y_2d[-1, :, :, :] += bias.view(-1, 1, 1)
++
++        # Reshape to NxM shaped where N are the nodes and M are the coefficients for the bounds
++        y = y_2d.detach().reshape(-1, int(out_size)).T
++
++        return y
++
++    def ssip_forward(self, bounds_symbolic_pre: list, add_bias: bool = True,
++                     calc_nodes: torch.Tensor = None) -> torch.Tensor:
++
++        """
++        Propagates the upper and lower symbolic bounds of ssip.
++
++        Args:
++            bounds_symbolic_pre:
++                A list of 2xNxM tensor with the symbolic bounds. The list contains
++                all input bounds, the first dimension of the bounds contains
++                the lower and upper bounds respectively.
++            add_bias:
++                If true, the bias is added.
++            calc_nodes:
++                If provided, only these output nodes are calculated.
++        Returns:
++            The post-op values
++        """
++
++        if len(bounds_symbolic_pre) > 1:
++            raise ValueError(f"Expected one set of symbolic bounds, got {len(bounds_symbolic_pre)}")
++
++        bounds_symbolic_pre = bounds_symbolic_pre[0]
++
++        stride = self.params["stride"]
++        padding = self.params["padding"]
++        output_padding = self.params["output_padding"]
++        weights = self.params["weight"]
++        bias = self.params["bias"]
++        groups = self.params["groups"]
++        in_shape = self.params["in_shape"]
++
++        eq_dim, coeff_dim = bounds_symbolic_pre.shape[1:]
++
++        low_pre = bounds_symbolic_pre[0].T.reshape((-1, *in_shape))
++        up_pre = bounds_symbolic_pre[1].T.reshape((-1, *in_shape))
++
++        # Positive coefficients
++        tmp_weights = weights.clone()
++        tmp_weights[tmp_weights < 0] = 0
++
++        low_post = functional.conv_transpose2d(low_pre, weight=tmp_weights, stride=stride,
++                                               output_padding=output_padding, padding=padding, groups=groups)
++        up_post = functional.conv_transpose2d(up_pre, weight=tmp_weights, stride=stride,
++                                              output_padding=output_padding, padding=padding, groups=groups)
++
++        # Negative coefficients
++        tmp_weights[:] = weights
++        tmp_weights[tmp_weights > 0] = 0
++
++        low_post += functional.conv_transpose2d(up_pre, weight=tmp_weights, stride=stride,
++                                                output_padding=output_padding, padding=padding, groups=groups)
++        up_post += functional.conv_transpose2d(low_pre, weight=tmp_weights, stride=stride,
++                                               output_padding=output_padding, padding=padding, groups=groups)
++
++        low_post = low_post.view((-1, coeff_dim, *low_post.shape[1:]))
++        up_post = up_post.view((-1, coeff_dim, *up_post.shape[1:]))
++
++        if bias is not None:
++            low_post[:, -1] += bias.view(-1, 1, 1)
++            up_post[:, -1] += bias.view(-1, 1, 1)
++
++        low_post = low_post.reshape(coeff_dim, -1).T.unsqueeze(0)
++        up_post = up_post.reshape(coeff_dim, -1).T.unsqueeze(0)
++        return torch.cat((low_post, up_post), dim=0)
++
++    # noinspection PyTypeChecker,PyCallingNonCallable
++    def rsip_backward(self, bounds_symbolic_post: torch.Tensor, add_bias: bool = True) -> list:
++
++        """
++        Reverse propagates the given symbolic bounds by substituting variables from the
++        previous node. Used by the RSIP algorithm.
++
++        Args:
++            bounds_symbolic_post:
++                A 2d array where each row is an equation, the columns are coefficients
++                and the last element in each row is the constant of the symbolic bound.
++            add_bias:
++                If true, the bias is considered.
++        Returns:
++            The new bound with respect to the variables from the preceding node.
++        """
++
++        in_shape = self.params["in_shape"]
++        weights = self.params["weight"]
++
++        bias = self.params["bias"]
++        groups = self.params["groups"]
++        stride = self.params["stride"]
++        padding = self.params["padding"]
++        out_shape = self.out_shape(in_shape)
++
++        num_eqs = bounds_symbolic_post.shape[0]
++
++        bounds_symbolic_pre = torch.empty((num_eqs, torch.prod(in_shape) + 1), dtype=self._precision).to(device=bounds_symbolic_post.device)
++
++        bounds_symbolic_pre[:, -1] = bounds_symbolic_post[:, -1]
++
++        if not add_bias or bias is None:
++            bias = torch.zeros((out_shape[0]), dtype=self._precision).to(device=bounds_symbolic_pre.device)
++
++        vars_pr_channel = torch.prod(self.out_shape(in_shape=torch.LongTensor(tuple(in_shape)))[1:3])
++
++        bounds_symbolic_pre[:, :-1] = functional.conv2d(
++            bounds_symbolic_post[:, :-1].view(bounds_symbolic_post.shape[0], *tuple(out_shape)), weight=weights,
++            stride=stride, padding=padding, groups=groups).view(num_eqs, -1)
++
++        bounds_symbolic_pre[:, -1] += torch.sum(bounds_symbolic_post[:, :-1].view(num_eqs, -1, vars_pr_channel) *
++                                                bias.view(1, -1, 1), dim=(1, 2))
++
++        return [bounds_symbolic_pre]
++
++    # noinspection PyTypeChecker
++    def linear_relaxation(self, lower_bounds_concrete_in: torch.Tensor, upper_bounds_concrete_in: torch.Tensor,
++                          force_parallel: bool = False) -> torch.Tensor:
++
++        """
++        Not implemented for linear activations.
++        """
++
++        msg = f"linear_relaxation(...) not implemented"
++        raise NotImplementedError(msg)
++
++    # noinspection PyArgumentList,PyCallingNonCallable
++    def out_shape(self, in_shape: torch.Tensor) -> torch.Tensor:
++
++        """
++        Returns the output-shape of the data as seen in the original network.
++        """
++
++        params = self.params
++        channels = params["out_channels"]
++
++        height = ((in_shape[1] - 1) * params["stride"][0] + params["kernel_size"][0] - 2 * params["padding"][0] +
++                  params["output_padding"][0])
++        width = ((in_shape[2] - 1) * params["stride"][1] + params["kernel_size"][1] - 2 * params["padding"][1] +
++                 params["output_padding"][1])
++
++        return torch.LongTensor((channels, height, width))
++
++
+ class AvgPool2d(AbstractOperation):
+ 
+     def __init__(self):
+diff --git a/sip_torch/operations/piecewise_linear.py b/sip_torch/operations/piecewise_linear.py
+index 12d0d46..42216bb 100644
+--- a/sip_torch/operations/piecewise_linear.py
++++ b/sip_torch/operations/piecewise_linear.py
+@@ -317,3 +317,185 @@ class Relu(AbstractOperation):
+         bounds_symbolic_post[:, -1] += biases_sum
+ 
+         return [bounds_symbolic_post], biases.cpu(), biases_sum.cpu(), relax_diff
++
++
++class LeakyRelu(AbstractOperation):
++
++    @property
++    def is_linear(self) -> bool:
++        return False
++
++    @property
++    def is_monotonically_increasing(self) -> bool:
++        return True
++
++    @property
++    def required_params(self) -> list:
++        return ["negative_slope"]
++
++    @classmethod
++    def abstracted_torch_funcs(cls) -> list:
++
++        """
++        Returns:
++            A list with all torch functions that are abstracted by the current
++            subclass.
++        """
++
++        return [nn.modules.activation.LeakyReLU, nn.LeakyReLU]
++
++    @property
++    def has_cex_optimisable_relaxations(self) -> bool:
++
++        """
++        Returns true if the op-type can take advantage of cex-optimised relaxations.
++        """
++
++        return True
++
++    def get_num_non_linear_neurons(self, bounds_concrete_pre: torch.Tensor) -> int:
++
++        """
++        Returns the number of non-linear neurons based on bounds.
++
++        Args:
++            bounds_concrete_pre:
++                A Nx2 tensor with the lower bounds of the neurons in the first col
++                and upper bounds in the second.
++        """
++
++        return int(torch.sum((bounds_concrete_pre[:, 0] < 0) * (bounds_concrete_pre[:, 1] > 0)))
++
++    def forward(self, x: torch.Tensor, add_bias: bool = True):
++
++        """
++        Propagates through the operation.
++
++        Args:
++            x:
++                The input as a NxM tensor where each row is a symbolic bounds for
++                the corresponding node. Can be used on concrete values instead of
++                bound by shaping them into a Nx1 tensor.
++            add_bias:
++                If true, the bias is added.
++        Returns:
++            The value of the activation function at const_terms.
++        """
++
++        return nn.functional.leaky_relu(x, self.params["negative_slope"])
++
++    def rsip_backward(self, bounds_symbolic_post: torch.Tensor, add_bias: bool = True) -> list:
++        """
++        Reverse propagates the given symbolic bounds by substituting variables from the
++        previous node. Used by the RSIP algorithm.
++        """
++        raise NotImplementedError(f"propagate_reversed(...) not implemented")
++
++    def ssip_forward(self, bounds_symbolic_pre: torch.Tensor, add_bias: bool = True,
++                     calc_nodes: torch.Tensor = None) -> torch.Tensor:
++        """
++        Propagates the upper and lower bounding equations of ssip.
++        """
++        raise NotImplementedError(f"propagate(...) not implemented")
++
++    # noinspection PyTypeChecker
++    def linear_relaxation(self, lower_bounds_concrete_in: torch.Tensor, upper_bounds_concrete_in: torch.Tensor,
++                          force_parallel: bool = False) -> torch.Tensor:
++
++        """
++        Calculates the linear relaxation
++
++        The linear relaxation is a 2xNx2 tensor, where relaxation[0] represents a and b
++        of the lower relaxation equation: l(const_terms) = ax + b (correspondingly,
++        relaxation[1] is the upper relaxation).
++
++        The relaxations are described in detail in the DeepSplit paper.
++
++        Args:
++            lower_bounds_concrete_in:
++                The concrete lower bounds of the input to the nodes
++            upper_bounds_concrete_in:
++                The concrete upper bounds of the input to the nodes
++            force_parallel:
++                If true, parallel relaxations are required.
++        Returns:
++            The relaxations as a Nx2 tensor
++        """
++
++        negative_slope = self.params["negative_slope"]
++        layer_size = lower_bounds_concrete_in.shape[0]
++        relaxations = torch.zeros((2, layer_size, 2), dtype=self._precision).to(device=lower_bounds_concrete_in.device)
++
++        # Operating in the positive area
++        fixed_upper_idx = torch.nonzero(lower_bounds_concrete_in >= 0)
++        relaxations[:, fixed_upper_idx, 0] = 1
++        relaxations[:, fixed_upper_idx, 1] = 0
++
++        # Operating in the negative area
++        fixed_lower_idx = torch.nonzero(upper_bounds_concrete_in <= 0)
++        relaxations[:, fixed_lower_idx, 0] = negative_slope
++        relaxations[:, fixed_lower_idx, 1] = 0
++
++        # Operating in the non-linear area
++        mixed_idx = torch.nonzero((upper_bounds_concrete_in > 0)*(lower_bounds_concrete_in < 0))
++
++        if len(mixed_idx) == 0:
++            return relaxations
++
++        xl = lower_bounds_concrete_in[mixed_idx]
++        xu = upper_bounds_concrete_in[mixed_idx]
++
++        # Upper relaxation
++        a = (xu - xl*negative_slope) / (xu - xl)
++        b = xl*negative_slope - a * xl
++        relaxations[1, :, 0][mixed_idx] = a
++        relaxations[1, :, 1][mixed_idx] = b
++
++        # Lower relaxation
++        if force_parallel:
++            relaxations[0, :, 0][mixed_idx] = a
++        else:
++            larger_up_idx = (upper_bounds_concrete_in + lower_bounds_concrete_in) > 0
++            smaller_up_idx = ~larger_up_idx
++
++            relaxations[0, larger_up_idx, 0] = 1
++            relaxations[0, smaller_up_idx, 0] = negative_slope
++
++        return relaxations
++
++    def split_point(self, xl: float, xu: float):
++
++        """
++        Returns the preferred split point for branching which is 0 for the ReLU.
++
++        Args:
++            xl:
++                The lower bound on the input.
++            xu:
++                The upper bound on the input.
++
++        Returns:
++            The preferred split point
++        """
++
++        return torch.zeros(1)
++
++    def get_non_linear_neurons(self, bounds_concrete_pre: torch.Tensor) -> torch.Tensor:
++
++        """
++        An array of boolean values. 'True' indicates that the corresponding neuron
++        is non-linear in the input domain as described by bounds_concrete_pre; 'false'
++        that it is linear.
++
++        Note that if bounds_concrete_pre.shape[0] != weights.shape[0], it is assumed
++        that all neurons are non-linear wrt prelu parameters (prelu.weight != 1 for
++        any of the given bounds).
++
++        Args:
++            bounds_concrete_pre:
++                The concrete pre-operation value.
++        Returns:
++            A boolean tensor with 'true' for non-linear neurons and false otherwise.
++        """
++
++        return (bounds_concrete_pre[..., 0] < 0) * (bounds_concrete_pre[..., 1] > 0)
+diff --git a/util/config.py b/util/config.py
+index 0ca889d..3feaa54 100644
+--- a/util/config.py
++++ b/util/config.py
+@@ -45,7 +45,7 @@ class CONFIG:
+ 
+     # Split domains:
+     INPUT_NODE_SPLIT = True
+-    HIDDEN_NODE_SPLIT = True
++    HIDDEN_NODE_SPLIT = False
+     INDIRECT_HIDDEN_MULTIPLIER = 0.75
+     INDIRECT_INPUT_MULTIPLIER = 0.75
+ 
+diff --git a/verification/verifier.py b/verification/verifier.py
+index 0a6c470..8c24503 100644
+--- a/verification/verifier.py
++++ b/verification/verifier.py
+@@ -426,6 +426,8 @@ class Verifier:
+         x.data[x < input_bounds[:, 0]] = input_bounds[:, 0][x < input_bounds[:, 0]]
+         x.data[x > input_bounds[:, 1]] = input_bounds[:, 1][x > input_bounds[:, 1]]
+         x = x.view(1, *self._objective.input_shape).detach().clone()
++        if self._model.uses_64bit:
++            x = x.double()
+ 
+         x.requires_grad = True
+ 
+-- 
+2.25.1
+

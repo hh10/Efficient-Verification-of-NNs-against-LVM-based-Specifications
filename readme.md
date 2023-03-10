@@ -4,9 +4,10 @@ This is the codebase for the verification pipelines and experiments in our work 
 ## Installation
    - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
    - To use the codebase for verification using:
-        - Open-source version of VeriNet toolkit: Install gurobi (make sure its executable and libraries can be found, i.e., its setup.py can be run from the root of this codebase). Setup VeriNet from [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verifiers/patches/opensource_version) (read its readme for details). 
+        - Open-source version of VeriNet toolkit: Setup VeriNet from [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verifiers/opensource_verinet_for_srvp.patch).
         - Proprietary version: Contact me or other authors to get you the licensed VeriNet version and setup.
-        After setup, ensure that `python3 verinet_line_segment_verification.py --version={opensource,proprietary}` runs successfully.
+        For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license to source, for verifying pipelines with their verification paths including >5k activations).
+        After setup, ensure that `python3 check_srvp_verification_setup.py` runs successfully.
 ## Usage
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
