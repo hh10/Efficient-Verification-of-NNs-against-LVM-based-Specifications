@@ -5,6 +5,7 @@ import numpy as np
 from enum import Enum
 import copy
 import time
+import random
 
 
 class Status(Enum):
@@ -27,15 +28,13 @@ def segment_encoding_layers(pts):
 
 
 class VerificationBackend(Enum):
-    OpensourceVerinet = 0
-    ProprietaryVerinet = 1
+    OpensourceVerinet = "opensource_verinet"
+    # ProprietaryVerinet = "proprietary_verinet"  # contact authors for this version+its patches and uncomment
+    DEFAULT = OpensourceVerinet  # change here to use a different supported verifier
 # add more verification backends as implementing their support and can change the DEFAULT_VERIFIER constant to use a specific one
 
 
-DEFAULT_VERIFIER = VerificationBackend.OpensourceVerinet
-
-
-def get_verifier_solver(layers, device, sanity_checks, verifierBackend=DEFAULT_VERIFIER):
+def get_verifier_solver(layers, device, sanity_checks, verifierBackend=VerificationBackend.DEFAULT):
     layers = [ml.double().to(device) for ml in layers]
     # merge neighbouring Linear layers to better verification results 
     merged_ver_layers = merge_linear_neighbours(layers, device, sanity_check=sanity_checks)
@@ -50,7 +49,7 @@ def get_verifier_solver(layers, device, sanity_checks, verifierBackend=DEFAULT_V
     raise NotImplementedError(f"Verifier backend {verifierBackend.name} not supported.")
 
 
-def get_classification_objective(input_bounds, corr_class, num_classes, verifierModel, verifierBackend=DEFAULT_VERIFIER):
+def get_classification_objective(input_bounds, corr_class, num_classes, verifierModel, verifierBackend=VerificationBackend.DEFAULT):
     if verifierBackend == VerificationBackend.OpensourceVerinet:
         from verinet.verification.objective import Objective
     else:
@@ -64,7 +63,7 @@ def get_classification_objective(input_bounds, corr_class, num_classes, verifier
     return objective
 
 
-def verify_segment(mlayers, pts, corr_class, num_classes, timeout_s, device, sanity_checks=False, verifierBackend=DEFAULT_VERIFIER):
+def verify_segment(mlayers, pts, corr_class, num_classes, timeout_s, device, sanity_checks=False, verifierBackend=VerificationBackend.DEFAULT):
     input_bounds = np.zeros((1, 2), dtype=np.float32)
     input_bounds[:, 1] = 1  # bounds for alpha for the line segment
 
@@ -105,7 +104,7 @@ def verify(solver, objective, timeout_s, device, sanity_checks=False):
     if type(verifier_output) is list:
         status, ceg_using_PGD, jsip_bounds, mem_usage_bytes = verifier_output  # can modify VeriNet codebase to return all these values
         if sanity_checks:
-            print(f"Cex_using_PGD: {counterex_using_PGD}")
+            print(f"Cex_using_PGD: {ceg_using_PGD}")
         if jsip_bounds is not None:
             print(f"jsip_bounds: {jsip_bounds.shape}")
             bounds_diff = jsip_bounds[:, 1] - jsip_bounds[:, 0]
@@ -214,3 +213,49 @@ def counterex_sanity_checks(ceg, ceg_alpha, layers, pts, corr_class):
     img_ceg_false = pred_class == corr_class
     print(f"Image counterexample is true/good?: {not img_ceg_false.item()} (True class: {corr_class}, Predicted class: {pred_class.item()})")
     assert alpha_ceg_false == img_ceg_false, print(alpha_ceg_false.item(), img_ceg_false.item())
+
+
+def segment_verification(ndims, device, i):
+    num_classes, ldims, bias = 4, 16, False
+    in_dims = ndims*ndims*ldims
+    Reshape = get_verifier_reshape_op()
+    model_layers = [Reshape((1, ldims, ndims, ndims)),  # will reshape latent space line to 2d for conv operations
+                    ## Note: can run ConvTranspose2d by adding its implementation patch for verinet provided in the codebase verinet_patches/*
+                    # nn.ConvTranspose2d(ldims, ldims, 1, 1),
+                    ## Note: can run LeakyReLU by adding its implementation patch for verinet provided in the codebase verinet_patches/*
+                    # nn.LeakyReLU(1e-2),
+                    nn.Conv2d(ldims, ldims, 1, 1),
+                    nn.ReLU(),
+                    nn.Flatten(),
+                    nn.Linear(in_dims, in_dims, bias=bias),
+                    nn.ReLU(),
+                    nn.Linear(in_dims, num_classes, bias=bias)]
+
+    rand_x = torch.rand((2, in_dims), dtype=torch.double)  # 2 pts in in_dim space
+    true_class = 1
+    print("")
+    print("Verifying for input no.:", i)
+    status, _, _, ver_time, _ = verify_segment(model_layers, rand_x, true_class, num_classes, 30, device, sanity_checks=True)
+    print(f'Verified {status.name} in duration {ver_time:.2f}s')
+    return status
+
+
+if __name__ == '__main__':
+    print("Example runs for locally verifying line segment input with custom VeriNetNN:")
+
+    ## add verifiers
+    # import sys
+    # sys.path.append(f"verifiers/{VerificationBackend.DEFAULT.value}")
+
+    # set random seed and device for reproducibility.
+    seed = 422
+    random.seed(seed)
+    torch.manual_seed(seed)
+    device = torch.device("cpu")  # cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device, "will be used for verification.")
+
+    results = {Status.Safe: 0, Status.Unsafe: 0, Status.Undecided: 0, Status.Underflow: 0}
+    for i in range(10):
+        status = segment_verification(random.randrange(4, 6), device, i)
+        results[status] += 1
+    print(results)

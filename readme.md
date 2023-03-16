@@ -7,7 +7,7 @@ This is the codebase for the verification pipelines and experiments in our work 
         - Open-source version of VeriNet toolkit: Setup VeriNet from [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verifiers/opensource_verinet_for_srvp.patch).
         - Proprietary version: Contact me or other authors to get you the licensed VeriNet version and setup.
         For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license to source, for verifying pipelines with their verification paths including >5k activations).
-        After setup, ensure that `python3 check_srvp_verification_setup.py` runs successfully.
+        After setup, ensure that `python3 verifiers_utils.py` runs successfully.
 ## Usage
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
@@ -51,7 +51,7 @@ Commands for various uses of this codebase are as follows:
             `python3 verify.py --model_path=<path to Object10_model.tar> --test_attribute=<attrA> --target_attributes=<attrB,attrC>` \
     For each dataset image, the script also verifies for eps in conditional dimensions if any.
 
-3. Reproducing experiment results in the submission:
+3. Reproducing experiment results:
     - All reported networks are defined in [model.py](model.py), [models_impl/](models_impl) and notebook/notebook_utils.py.
     - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in [sample_configs](sample_configs). Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
     - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
