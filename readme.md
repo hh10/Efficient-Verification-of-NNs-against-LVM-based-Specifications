@@ -68,6 +68,8 @@ https://user-images.githubusercontent.com/14110609/201974045-bda27395-f399-4e4a-
 
 https://user-images.githubusercontent.com/14110609/201974099-ae460e15-a643-4e90-a040-0cee2df279a9.mp4
 
+## Datasets
+- The Object3D dataset (3DOD) can be generated in Blender with [this script](data/objects10_3Dpose_dataset_generation.blend11) for the CAD models as in the [ModelNet10 dataset](https://3dshapenets.cs.princeton.edu/).
 
 ## License and Copyright
 * Copyright (c) 2023 [Verification of Autonomous Systems (VAS) Group, Department of Computing, Imperial College London](https://vas.doc.ic.ac.uk/)
