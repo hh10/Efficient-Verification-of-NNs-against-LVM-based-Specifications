@@ -4,6 +4,7 @@ from torchvision import models, transforms
 from torchinfo import summary
 
 import numpy as np
+from numpy import linalg
 from tempfile import NamedTemporaryFile
 import shutil
 import csv
@@ -17,13 +18,20 @@ import tempfile
 
 
 def test_model_inversion(model, latent_dims, device):
-    tol = 1e-3
-    rand_x = torch.rand((1, 2*latent_dims)).to(device)
-    with torch.no_grad():
-        _, z_mu_sigma = model.encoding_head(rand_x.double())
-        x_hat = nn.Sequential(*model.encoding_head.get_inverse_layers())(z_mu_sigma.double())
-        max_diff = torch.max(torch.abs(x_hat-rand_x))
-    assert max_diff < tol, f'Original feats: {rand_x[0, :10]}\nInverted feats: {x_hat[0, :10]} (maximum inversion difference was {max_diff})'
+    tol = 1e-5
+    for _ in range(10):
+        rand_x = 50 * torch.rand((1, 2*latent_dims)).to(device) + 1
+        with torch.no_grad():
+            _, z_mu_sigma = model.encoding_head(rand_x.double())
+            x_hat = nn.Sequential(*model.encoding_head.get_inverse_layers())(z_mu_sigma.double())
+            max_diff = torch.max(torch.abs(x_hat-rand_x))
+        assert max_diff < tol, f'Original feats: {rand_x[0, :10]}\nInverted feats: {x_hat[0, :10]} (maximum inversion difference was {max_diff})'
+    for layer in model.encoding_head.get_inverse_layers():
+        if isinstance(layer, nn.Linear):
+            cond_number = linalg.cond(layer.weight.clone().detach().cpu().numpy())
+            assert cond_number < 1./tol, f"High condition number {cond_number} for weight of layer {layer} given the error tolerance of {tol}."
+            eigvals, _ = linalg.eig(layer.weight.clone().detach().cpu().numpy())
+            assert all(np.absolute(v) > tol for v in eigvals)
     printl(f'Model inversion verified w.r.t {tol} (maximum inversion difference was {max_diff})')
 
 
@@ -63,12 +71,12 @@ def load_params(config: Union[dict, str]) -> dict:
 
 
 def load_model(model, mparams, device, optimizer=None):
-    if mparams['train_vae']:
-        test_model_inversion(model, mparams['latent_dim'], device)  # ensure model inversion!!
-
     path = mparams['model_path'] or mparams['classifier_path']
     if path is None:
+        if mparams['train_vae']:
+            test_model_inversion(model, mparams['latent_dim'], device)  # ensure model inversion!!
         return
+
     ckpt = torch.load(path, map_location=device)
     if mparams['model_path'] is not None:
         print(f'Loading MODEL from {mparams["model_path"]}')
@@ -77,6 +85,9 @@ def load_model(model, mparams, device, optimizer=None):
         print(f'Loading CLA from {mparams["classifier_path"]}')
         model.fdn.load_state_dict(ckpt['fdn_state_dict'])
         model.classification_head.load_state_dict(ckpt['classifier_state_dict'])
+    if mparams['train_vae']:
+        test_model_inversion(model, mparams['latent_dim'], device)  # ensure model inversion!!
+
     if optimizer is not None:
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
     return  # ckpt['loss'], ckpt['epoch'], ckpt['params']

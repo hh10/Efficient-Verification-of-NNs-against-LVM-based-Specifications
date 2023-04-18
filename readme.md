@@ -1,13 +1,13 @@
 # Efficient Verification of NNs against LVM-based Specifications
 
 This is the codebase for the verification pipelines and experiments in our work on 'Efficient Verification of Neural Networks against LVM-based Specifications'. 
-## Installation
+## Setup
    - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
    - To use the codebase for verification using:
         - Open-source version of VeriNet toolkit: Setup VeriNet from [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verifiers/opensource_verinet_for_srvp.patch).
         - Proprietary version: Contact me or other authors to get you the licensed VeriNet version and setup.
-        For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license to source, for verifying pipelines with their verification paths including >5k activations).
-        After setup, ensure that `python3 verifiers_utils.py` runs successfully.
+For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license to source, for verifying pipelines with their verification paths including >5k activations).
+Run `export PYTHONPATH=$PYTHONPATH:$(pwd)/<path to downloaded verifier>` such that verinet folder is in the python search path, and ensure that `python3 verifiers_utils.py` runs successfully.
 ## Usage
 Commands for various uses of this codebase are as follows:
 1. To train the verification pipeline elements:
