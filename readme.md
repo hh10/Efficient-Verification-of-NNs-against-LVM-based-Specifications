@@ -1,12 +1,14 @@
 # Efficient Verification of NNs against LVM-based Specifications
 
-This is the codebase for the verification pipelines and experiments in our work on 'Efficient Verification of Neural Networks against LVM-based Specifications'. 
+This is the codebase for the verification pipelines and experiments in our work on 'Efficient Verification of Neural Networks against LVM-based Specifications'.
 ## Setup
    - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
    - To use the codebase for verification using:
         - Open-source version of VeriNet toolkit: Setup VeriNet from [github repo](https://github.com/vas-group-imperial/VeriNet). Additional patches are required as provided in [verinet_patches](verifiers/opensource_verinet_for_srvp.patch).
         - Proprietary version: Contact me or other authors to get you the licensed VeriNet version and setup.
-For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license to source, for verifying pipelines with their verification paths including >5k activations).
+
+For both versions, you will need the [Xpress solver](https://www.fico.com/en/products/fico-xpress-solver) (with a license, for verifying pipelines with their verification paths including >5k activations).
+
 Run `export PYTHONPATH=$PYTHONPATH:$(pwd)/<path to downloaded verifier>` such that verinet folder is in the python search path, and ensure that `python3 verifiers_utils.py` runs successfully.
 ## Usage
 Commands for various uses of this codebase are as follows:
@@ -51,25 +53,25 @@ Commands for various uses of this codebase are as follows:
             `python3 verify.py --model_path=<path to Object10_model.tar> --test_attribute=<attrA> --target_attributes=<attrB,attrC>` \
     For each dataset image, the script also verifies for eps in conditional dimensions if any.
 
-3. Reproducing experiment results:
+3. To reproduce experiment results:
     - All reported networks are defined in [model.py](model.py), [models_impl/](models_impl) and notebook/notebook_utils.py.
     - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in [sample_configs](sample_configs). Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
-    - (Requires VeriNet installation) All verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
+    - (Requires VeriNet) Some verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
+
+## Datasets
+- The Object3D dataset (3DOD) can be generated in Blender with [this script](data/objects10_3Dpose_dataset_generation.blend11) for the CAD models as in the [ModelNet10 dataset](https://3dshapenets.cs.princeton.edu/).
 
 ## Additional experiment results for Fairface dataset
 ![Fairfaces results](fairface_rebuttal_experiments/fairfaces_experiment_results_summary.png)
 
 ## Featured Outcomes and Demos
-Below are the sample reconstruction outcomes for our proposed SRVP pipelines LVMs after training.
+Below are the sample reconstruction outcomes for some SRVP pipelines LVMs.
 ![Screenshot from 2022-11-15 22-26-31](https://user-images.githubusercontent.com/14110609/202038219-5ced19be-5edf-464c-b47d-a775e083120d.png)
-Watch through the videos below to see the specific changes in object reconstructions with changes in disentangled conditional dimensions.
+Watch through the videos below to see the specific changes in object reconstructions with changes in disentangled conditional dimensions (generated using [notebooks/SRVP_pipelines_qualitative_evaluation.ipynb](notebooks/SRVP_pipelines_qualitative_evaluation.ipynb)).
 
 https://user-images.githubusercontent.com/14110609/201974045-bda27395-f399-4e4a-8ff0-9a054c153a6d.mp4
 
 https://user-images.githubusercontent.com/14110609/201974099-ae460e15-a643-4e90-a040-0cee2df279a9.mp4
-
-## Datasets
-- The Object3D dataset (3DOD) can be generated in Blender with [this script](data/objects10_3Dpose_dataset_generation.blend11) for the CAD models as in the [ModelNet10 dataset](https://3dshapenets.cs.princeton.edu/).
 
 ## License and Copyright
 * Copyright (c) 2023 [Verification of Autonomous Systems (VAS) Group, Department of Computing, Imperial College London](https://vas.doc.ic.ac.uk/)
