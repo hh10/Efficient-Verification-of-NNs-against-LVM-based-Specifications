@@ -50,9 +50,9 @@ def get_epoch_loss_weights(tparams, epoch, train_sep, sw):
         if epoch < tparams['only_vae_training_epochs']:
             cla_weight = 0
         else:
-            loss_kl_weight = tparams['loss_kl_weight'] * np.min((1, float(epoch+nepochs/5)/nepochs))
+            loss_kl_weight = tparams['loss_kl_weight']  # * np.min((1, float(epoch+nepochs/5)/nepochs))
             loss_recons_weight = tparams['loss_recons_weight']
-            cla_weight = np.min((0.97, float(epoch+13)/(nepochs-tparams['only_cla_training_epochs']+4)))
+            cla_weight = np.min((0.99, float(epoch+nepochs/2)/(nepochs-tparams['only_cla_training_epochs']+4)))
         sw.add_scalar("Classification weightage", cla_weight, global_step=epoch)
     return loss_kl_weight, loss_recons_weight, cla_weight
 
@@ -123,9 +123,10 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
             
                 loss_kl, loss_conditional = model.get_encoding_losses()
                 # adding loss for z cyclic consistency so counterexamples are true and encoding is interpretable
-                z_mu_lvar_hat = model(x_hat)[3]
-                loss_cc = ((z_mu_lvar - z_mu_lvar_hat) ** 2).sum()
-                loss_vae = loss_kl * loss_kl_weight + loss_conditional * tparams['loss_conditional_weight'] * np.min((25., float(1+epoch))) + loss_cc
+                loss_vae = loss_kl * loss_kl_weight + loss_conditional * tparams['loss_conditional_weight']  # * np.min((25., float(1+epoch)))
+                # z_mu_lvar_hat = model(x_hat)[3]
+                # loss_cc = ((z_mu_lvar - z_mu_lvar_hat) ** 2).sum()
+                # loss_vae += loss_cc
                 if tparams['train_vae']:
                     # use reconstruction loss only if LVM is VAE, else only use encoding losses
                     loss_rec = ((x - x_hat) ** 2).sum()
@@ -179,7 +180,7 @@ def train(train_dl, test_dl, model, mparams, tparams: dict, dataloader, sample_b
         test_acc = evaluate_accuracy(model, test_dl, device)
         sw.add_scalar("Test accuracy", test_acc, global_step=epoch)
         if tparams['train_vae'] and epoch % 5 == 0:
-            # plot_embeddings(zs, z_noisys, ys, conditional_ldims, len(classes), epoch, results_dirs['embeddings'], sw=None)
+            plot_embeddings(zs, z_noisys, ys, conditional_ldims, len(classes), epoch, results_dirs['embeddings'], sw=None)
             plot_visual_checks(model, device, sample_batch, results_dirs, dataloader, mparams, epoch)
 
         # save models and update experiments list

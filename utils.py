@@ -272,7 +272,7 @@ def get_transforms(input_size: int, transforms_list: list = [], normalize: bool 
 
 
 def denormalize(dataset_name, images):
-    if dataset_name in ["MNIST", "FashionMNIST", "Zappos50k", "Objects10_3Dpose"]: #, "Fairfaces", "TrafficSignsSynth"]:
+    if dataset_name in ["MNIST", "FashionMNIST", "Zappos50k", "Objects10_3Dpose"]:  #, "Fairfaces", "TrafficSignsSynth"]:
         return images.to('cpu')
     means,  = torch.tensor((0.5, 0.5, 0.5)).reshape(1, 3, 1, 1)
     std_devs = torch.tensor((0.5, 0.5, 0.5)).reshape(1, 3, 1, 1)
@@ -290,52 +290,53 @@ def transformed_images(image, transform_types):
             tinfo = transform_types[transform]
             ts = np.linspace(0, tinfo['range'], tinfo['steps']+1)[1:]
 
+        sS, lS, sR, lR = 1/7., 1/4., 10., 45.
         if transform == "left_shear":
-            ses = ts if ts is not None else [random.uniform(1./6, 1./3)]
+            ses = ts if ts is not None else [random.uniform(sS, lS)]
             for s in ses:  # bigger s means greater shear
                 start_pts = [[0, 0], [w, 0], [w, w], [0, w]]
                 end_pts = [[s*w, s*w], [w, 0], [w, w], [s*w, (1-s)*w]]
                 images.append(transforms.functional.perspective(image, start_pts, end_pts))
                 attrs.append(it)
         elif transform == "right_shear":
-            ses = ts if ts is not None else [random.uniform(1./6, 1./3)]
+            ses = ts if ts is not None else [random.uniform(sS, lS)]
             for s in ses:
                 start_pts = [[0, 0], [w, 0], [w, w], [0, w]]
                 end_pts = [[0, 0], [(1-s)*w, s*w], [(1-s)*w, (1-s)*w], [0, w]]
                 images.append(transforms.functional.perspective(image, start_pts, end_pts))
                 attrs.append(it)
         elif transform == "top_shear":
-            ses = ts if ts is not None else [random.uniform(1./6, 1./3.)]
+            ses = ts if ts is not None else [random.uniform(sS, lS)]
             for s in ses:
                 start_pts = [[0, 0], [w, 0], [w, w], [0, w]]
                 end_pts = [[s*w, 0], [(1-s)*w, 0], [w, w], [0, w]]
                 images.append(transforms.functional.perspective(image, start_pts, end_pts))
                 attrs.append(it)
         elif transform == "bottom_shear":
-            ses = ts if ts is not None else [random.uniform(1./6, 1./3.)]
+            ses = ts if ts is not None else [random.uniform(sS, lS)]
             for s in ses:
                 start_pts = [[0, 0], [w, 0], [w, w], [0, w]]
                 end_pts = [[0, 0], [w, 0], [(1-s)*w, (1-s)*w], [s*w, (1-s)*w]]
                 images.append(transforms.functional.perspective(image, start_pts, end_pts))
                 attrs.append(it)
         elif transform == "left_rotate":
-            angles = ts if ts is not None else [random.randrange(20, 50)]
+            angles = ts if ts is not None else [random.randrange(sR, lR)]
             for angle in angles:
                 images.append(transforms.functional.rotate(image, angle))
                 attrs.append(it)
         elif transform == "right_rotate":
-            angles = ts if ts is not None else [random.randrange(20, 50)]
+            angles = ts if ts is not None else [random.randrange(sR, lR)]
             for angle in angles:
                 images.append(transforms.functional.rotate(image, -angle))
                 attrs.append(it)
         elif transform == "towards":
-            ses = ts if ts is not None else [random.uniform(0.15, 0.35)]
+            ses = ts if ts is not None else [random.uniform(0.05, 0.25)]  # 0.15, 0.35
             for s in ses:
                 timage = transforms.Resize(size=int((1+s)*w))(image)
                 images.append(transforms.CenterCrop(size=w)(timage))
                 attrs.append(it)
         elif transform == "far":
-            ses = ts if ts is not None else [random.uniform(0.25, 0.55)]
+            ses = ts if ts is not None else [random.uniform(0.1, 0.4)]  # 0.25, 0.55
             for s in ses:
                 timage = transforms.Resize(size=int((1-s)*w))(image)
                 images.append(transforms.CenterCrop(size=w)(timage))

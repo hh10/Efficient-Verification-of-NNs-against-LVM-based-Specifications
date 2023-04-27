@@ -35,7 +35,7 @@ class VerificationBackend(Enum):
 
 
 def get_verifier_solver(layers, device, sanity_checks, verifierBackend=VerificationBackend.DEFAULT):
-    layers = [ml.double().to(device) for ml in layers]
+    layers = [copy.deepcopy(ml).double().to(device) for ml in layers]
     # merge neighbouring Linear layers to better verification results 
     merged_ver_layers = merge_linear_neighbours(layers, device, sanity_check=sanity_checks)
     # bias False is not expected in Verinet, so set bias to 0 where bias = False for Linear layers
@@ -69,7 +69,7 @@ def verify_segment(mlayers, pts, corr_class, num_classes, timeout_s, device, san
 
     # adding layers for constructing line segment between pts
     ls_enc_layers = segment_encoding_layers(pts)
-    layers = ls_enc_layers + copy.deepcopy(mlayers)
+    layers = ls_enc_layers + mlayers
 
     # prepare the verifier wrapper, solver and objective
     vmodel, solver = get_verifier_solver(layers, device, sanity_checks, verifierBackend)

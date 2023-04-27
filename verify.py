@@ -72,14 +72,18 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
     ver_results = {'cond_x': [], 'cond_ceg_z': []}
     vresults = {'total': 0, 'attr_dets': {}}
     vresults['ldim_eps'] = [{} for i in range(ndims_to_check)]
-    for k in [0.02, 0.06, 0.1, 0.25, 0.5, 1., 1.5, 2.5]:
-        vresults['attr_dets'][k] = 0
     vresults['attr_dets']['total'] = 0
+
+    epses = [0.02, 0.06, 0.1, 0.25, 0.5, 1., 1.5]
+
     progress_manager = enlighten.get_manager()
     batch_progress = progress_manager.counter(total=nimages, desc="\tBatches", unit="images", leave=False)
     for bi, (x, y, _) in enumerate(data.get_batch(device)):
         if vresults['total'] >= nimages:
             break
+        if len(x) > 1:
+            x = x[0].unsqueeze(0)
+            y = y[0]
         model = model.to(device)
         pred_logits, _, z_mu_lvar = model(x, only_gen_z=True)
         _, pred_label = torch.max(pred_logits, axis=1)
@@ -93,13 +97,14 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
         if attr_cla is None:
             z_mu_lvar = z_mu_lvar.detach().cpu()
             for ni in range(ndims_to_check):
-                for eps in [0.02, 0.06, 0.1, 0.25, 0.5, 1., 1.5, 2.5]:
+                for ei, eps in enumerate(epses):
                     climit = climits[ni] if ni < len(climits) else [[-3.5], [3.5]]
-                    input_bounds = np.zeros((z_mu_lvar.shape[0], 2), dtype=np.float32)
-                    input_bounds[ni, 0] = np.clip(z_mu_lvar[ni] - eps, 0, 1)  # replace 0, 1 with climits[0][0], climits[-1][-1]
-                    input_bounds[ni, 1] = np.clip(z_mu_lvar[ni] + eps, 0, 1)
+                    input_bounds = z_mu_lvar.unsqueeze(1).clone().repeat(1, 2).numpy()
+                    input_bounds[ni, 0] = input_bounds[ni, 0] - eps  # usually np.clip( , 0., 1.), and replace 0, 1 with climits[0][0], climits[-1][-1]
+                    input_bounds[ni, 1] = input_bounds[ni, 1] + eps  # usually np.clip( , 0., 1.), and replace 0, 1 with climits[0][0], climits[-1][-1]
                     if np.max(input_bounds[:, 1] - input_bounds[:, 0]) == 0:
                         print("nothing to verify")
+                        continue
                     objective = get_classification_objective(input_bounds, y.item(), num_classes, vmodel)
 
                     ver_status = solver.verify(objective=objective, timeout=30)
@@ -110,6 +115,8 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
                         vresults['ldim_eps'][ni][eps] = 0
                     if ver_status == Status.Safe:
                         vresults['ldim_eps'][ni][eps] += 1
+                        if eps == epses[-1]:
+                            print(f"Dimension {ni} verified safe till eps {eps} (entire tested range).")
                     else:
                         if ver_status == Status.Unsafe:
                             enc_out_ceg = solver.counter_example
@@ -117,19 +124,22 @@ def verinet_verify_conditional_zs(model, device, data, ndims_to_check, nimages, 
                             z_ceg = model.encoding_head.construct_z(torch.from_numpy(enc_out_ceg), add_noise=False)
                             ver_results['cond_x'].append(x)
                             ver_results['cond_ceg_z'].append((ni, eps, z_ceg))
+                        print(f"Dimension {ni} safe till eps {epses[ei-1] if ei > 0 else None} (found unsafe at {eps}).")
                         break  # no need to check for larger eps if smaller fails
 
         else:
             z_with_attr = model.encoding_head.construct_z(z_mu_lvar.unsqueeze(0))
             conditional_ldims = dataloader.get_dataset_params(["conditional_ldims"])
             for ni in range(conditional_ldims):
-                for eps in ver_results['attr_dets']:
+                for eps in epses:
                     for i in range(3):
                         z_with_attr[0, ni] = eps + torch.randn(1)*5e-2
                         recons = model.decoder(z_with_attr.to(device)).to(device)
                         logits = attr_cla(recons).to("cpu")
                         _, attrdet_logits = attr_cla.decode_logits(logits)
                         _, attr_label = torch.max(attrdet_logits, axis=1)
+                        if eps not in vresults['attr_dets']:
+                            vresults['attr_dets'][eps] = 0
                         vresults['attr_dets'][eps] += int(attr_label.item() == ni)
                         vresults['attr_dets']['total'] += 1
 
@@ -156,6 +166,9 @@ def verinet_verify_region_zs(model, device, data, nimages, save_args):
     for bi, (x, y, _) in enumerate(data.get_batch(device)):
         if region_eps['total'] >= nimages:
             break
+        if len(x) > 1:
+            x = x[0].unsqueeze(0)
+            y = y[0]
         model = model.to(device)
         pred_logits, _, z_mu_lvar = model(x.to(device), only_gen_z=True)
         _, pred_label = torch.max(pred_logits, axis=1)
@@ -166,12 +179,14 @@ def verinet_verify_region_zs(model, device, data, nimages, save_args):
         z_mu_lvar = z_mu_lvar.squeeze(0).detach().cpu()  # [2*ld]
         assert z_mu_lvar.dim() == 1, print("z_mu_lvar shape:", z_mu_lvar.shape)
 
-        for eps in [0.001, 0.0025, 0.005, 0.01, 0.0125, 0.025, 0.05, 0.1]:
+        epses = [0.001, 0.0025, 0.005, 0.01, 0.0125, 0.025, 0.05, 0.1]
+        for ei, eps in enumerate(epses):
             input_bounds = np.zeros((z_mu_lvar.shape[0], 2), dtype=np.float32)
-            input_bounds[:, 0] = np.clip(z_mu_lvar - eps, 0, 1)  # replace 0, 1 with climits[0][0], climits[-1][-1]
-            input_bounds[:, 1] = np.clip(z_mu_lvar + eps, 0, 1)
+            input_bounds[:, 0] = z_mu_lvar - eps  # usually np.clip( , 0., 1.), and replace 0, 1 with climits[0][0], climits[-1][-1]
+            input_bounds[:, 1] = z_mu_lvar + eps  # usually np.clip( , 0., 1.), and replace 0, 1 with climits[0][0], climits[-1][-1]
             if np.max(input_bounds[:, 1] - input_bounds[:, 0]) == 0:
                 print("nothing to verify")
+                continue
             objective = get_classification_objective(input_bounds, y.item(), num_classes, vmodel)
 
             ver_status = solver.verify(objective=objective, timeout=30)
@@ -182,7 +197,10 @@ def verinet_verify_region_zs(model, device, data, nimages, save_args):
                 region_eps[eps] = 0
             if ver_status == Status.Safe:
                 region_eps[eps] += 1
+                if eps == epses[-1]:
+                    print(f"Local region verified safe till eps {eps} (entire tested range).")
             else:
+                print(f"Local region safe till eps {epses[ei-1] if ei > 0 else None} (found unsafe at {eps}).")
                 break  # no need to check for larger eps if smaller fails
         if region_eps['total'] % 3 == 0 or region_eps['total'] == nimages-1 or bi == nimages-1:
             save_ver_results(*save_args[:-1], save_args[-1] + "_region", region_eps, bi)
@@ -229,7 +247,7 @@ def setup_and_verify(args):
     load_model(vae_cla, mparams, device)
     vae_cla.eval()  # todo(hh): check why eval doesn't work well
     # print and save nominal test accuracy
-    nominal_acc_str = "\nModels test accuracy is : {}".format(evaluate_accuracy(vae_cla, test_dl, device, show_progress=True))
+    nominal_acc_str = "\nModels test accuracy is : {}".format(evaluate_accuracy(vae_cla, test_dl, device, -1, show_progress=True))
     print(nominal_acc_str)
 
     # output folder for runs (dir structure is verification_results/dataset/date/time_runShortDescription)

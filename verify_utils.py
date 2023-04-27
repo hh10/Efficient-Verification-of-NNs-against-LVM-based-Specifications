@@ -6,7 +6,7 @@ import numpy as np
 import json
 
 from utils import NpEncoder
-from verifiers.segment_verification_utils import verify_segment, segment_encoding_layers, Status
+from verifiers_utils import verify_segment, segment_encoding_layers, Status
 
 
 def get_specification(dparams, test_attribute, target_attributes):
@@ -170,7 +170,7 @@ def verinet_verify_for_zs(x, y, model, ver_results, image_results, num_classes, 
             model, z_mu_lvar = model.to(device), z_mu_lvar.unsqueeze(0).to(device)
             with torch.no_grad():
                 if z is None:
-                    z = model.encoding_head.construct_z(z_mu_lvar, add_noise=False)
+                    z = model.encoding_head.construct_z(z_mu_lvar, add_noise=False)[0]
                 y_logits, _, recons_z_mu_lvar = model(model.decoder(z.unsqueeze(0)), only_gen_z=True)
             _, predLabel = torch.max(y_logits, axis=1)
             return torch.abs(z_mu_lvar - recons_z_mu_lvar).squeeze(0).detach().to("cpu"), predLabel == y

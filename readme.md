@@ -58,6 +58,13 @@ Commands for various uses of this codebase are as follows:
     - Most reconstruction outcomes in Table 1 can be reproduced from a straightforward run of the EDC_SRVP_pipelines_and_decoders_comparison.ipynb notebook. Some reported SRVP pipelines requires training as explained in 1. using configs in [sample_configs](sample_configs). Some trained pipelines from this run are uploaded as release with the repo, for user to run the verification scripts in the next step directly.
     - (Requires VeriNet) Some verification outcomes in Table 1 and in Appendix can be reproduced by running [bounds_computation.py](bounds_computation.py) and notebook/verification_comparison.py on the trained pipelines. Some verification results require a verification run as explained in 2. above. 
 
+### Example usage
+```bash
+export PYTHONPATH=$PYTHONPATH:$(pwd)/<path to downloaded verifier>
+python3 train.py --config=sample_configs/FashionMNIST_conv.txt
+python3 verify.py --model_path=<path to FashionMNIST model trained above or one in the release> --num_test_images=10
+```
+
 ## Datasets
 - The Object3D dataset (3DOD) can be generated in Blender with [this script](data/objects10_3Dpose_dataset_generation.blend11) for the CAD models as in the [ModelNet10 dataset](https://3dshapenets.cs.princeton.edu/).
 

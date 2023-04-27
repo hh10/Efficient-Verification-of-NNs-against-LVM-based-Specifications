@@ -61,9 +61,7 @@ class ClassificationHead(nn.Module):
         return self.model.float()(x)
 
     def get_layers(self):
-        if self.mparams['source'] == 'hub':
-            return list(self.model.children())
-        return [self.model]
+        return list(self.model.children())
 
 
 class Decoder(nn.Module):
@@ -71,7 +69,6 @@ class Decoder(nn.Module):
         super().__init__()
 
         if mparams['source'] == 'hub':
-            fdn_till_layer = int(mparams['fdn_till_layer'])
             if mparams['name'] == 'mobilenet_v2':
                 model = create_mobilenet_mirror_decoder(getattr(models, mparams['name']))
             else:
@@ -80,7 +77,10 @@ class Decoder(nn.Module):
             model = conv_Nlayer_upscalar(in_dims=in_dims, **mparams['fdn_args'])
         else:
             raise ValueError(f'Decoder for {mparams["source"]} not implemented')
-        self.model = nn.Sequential(*model, nn.Tanh())
+        last_activation = nn.Tanh
+        if mparams["dataset"] in ["MNIST", "FashionMNIST", "Zappos50k", "Objects10_3Dpose"]:
+            last_activation = nn.Sigmoid
+        self.model = nn.Sequential(*model, last_activation())
 
     def forward(self, x):
         return self.model(x.float())
