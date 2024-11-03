@@ -1,6 +1,6 @@
 # Efficient Verification of NNs against LVM-based Specifications
 
-This is the codebase for the verification pipelines and experiments in our work on 'Efficient Verification of Neural Networks against LVM-based Specifications'.
+This is the codebase for the verification pipelines and experiments in our work on '[Efficient Verification of Neural Networks against LVM-based Specifications](https://openaccess.thecvf.com/content/CVPR2023/papers/Hanspal_Efficient_Verification_of_Neural_Networks_Against_LVM-Based_Specifications_CVPR_2023_paper.pdf)'.
 ## Setup
    - To use the codebase for the proposed SRVP pipelines or LVM trainings, install all packages in requirements.txt. Run `python3 -m tests.tests` to ensure that tests run.
    - To use the codebase for verification using:
